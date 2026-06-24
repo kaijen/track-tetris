@@ -187,6 +187,23 @@
     return out;
   }
 
+  function segmentGloballyEmpty(i) {
+    return state.tracks.every((tr) => (tr.segments[i] || []).length === 0);
+  }
+  /** Indizes der Abschnitte, die ausgeblendet werden sollen: führender bzw.
+   *  abschließender Abschnitt, wenn er in ALLEN Tracks leer ist. Mind. ein
+   *  Abschnitt bleibt immer sichtbar. */
+  function hiddenSegments() {
+    const n = state.spine.length;
+    const hidden = new Set();
+    if (n > 0) {
+      if (segmentGloballyEmpty(0)) hidden.add(0);
+      if (segmentGloballyEmpty(n)) hidden.add(n);
+      if (hidden.size >= n + 1) hidden.delete(n);
+    }
+    return hidden;
+  }
+
   /** Globale Zeit-Struktur: Start/Dauer je Abschnitt und je Plenum. */
   function computeSchedule() {
     const startMin = parseTime(state.startTime);
@@ -388,6 +405,7 @@
     uid, parseTime, formatTime, formatDuration, tickMinutes,
     clampDuration, validColor,
     findTrack, segmentCount, segmentDurations, computeSchedule,
+    segmentGloballyEmpty, hiddenSegments,
     blocksDur, trackSegment, trackTotalDuration,
     // templates
     addTemplate, updateTemplate, deleteTemplate,

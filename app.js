@@ -92,7 +92,11 @@
     board.innerHTML = '';
     const px = state.pxPerMin;
     const tick = tickMinutes(px);
-    const { rows } = computeSchedule();
+    const schedule = computeSchedule();
+    const hidden = TT.hiddenSegments();
+    // Leere führende/abschließende Abschnitte ausblenden (dur 0 -> keine Zeit-
+    // verschiebung); restliche Zeilen für Lineal und Tracks gemeinsam nutzen.
+    const rows = schedule.rows.filter((r) => r.kind !== 'seg' || !hidden.has(r.index));
 
     // Pixelhöhe je Zeile (Abschnitt bzw. Plenum) – identisch für Lineal und Tracks
     const rowPx = rows.map((r) => r.kind === 'plen'
@@ -128,7 +132,7 @@
     // Endzeit-Label
     const endCell = document.createElement('div');
     endCell.className = 'ruler-cell is-end';
-    endCell.innerHTML = `<span class="ruler-time">${formatTime(computeSchedule().totalEnd)}</span>`;
+    endCell.innerHTML = `<span class="ruler-time">${formatTime(schedule.totalEnd)}</span>`;
     rulerBody.appendChild(endCell);
     rulerLane.append(rulerHead, rulerBody);
     board.appendChild(rulerLane);

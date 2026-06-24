@@ -85,6 +85,12 @@
     const track = activeTrack(state);
     if (!track) return;
     const { rows, totalEnd } = computeSchedule();
+    const hidden = TT.hiddenSegments();
+    // Aktiven Abschnitt auf einen sichtbaren legen, falls er ausgeblendet wurde
+    if (hidden.has(activeSeg)) {
+      const vis = rows.filter((r) => r.kind === 'seg' && !hidden.has(r.index)).map((r) => r.index);
+      if (vis.length) activeSeg = vis[vis.length - 1];
+    }
     els.trackSummary.textContent =
       `${state.startTime}–${formatTime(totalEnd)} · Σ ${formatDuration(trackTotalDuration(track))}`;
 
@@ -93,7 +99,7 @@
     for (const r of rows) {
       if (r.kind === 'plen') {
         list.appendChild(buildPlenumItem(r.block, r.start));
-      } else {
+      } else if (!hidden.has(r.index)) {
         buildSegGroup(state, track, r, list);
       }
     }
@@ -130,14 +136,14 @@
     header.dataset.segHead = String(segIndex);
     header.innerHTML = `<span></span><span class="m-seg-pick">${isTarget ? '● Ziel' : 'hierher'}</span>`;
     header.querySelector('span').textContent =
-      (state.spine.length ? `Abschnitt ${segIndex + 1}` : 'Programm') + ' · ab ' + formatTime(row.start);
+      (state.spine.length ? 'Parallel · ab ' : 'Programm · ab ') + formatTime(row.start);
     header.addEventListener('click', () => { activeSeg = segIndex; render(); });
     list.appendChild(header);
 
     if (blocks.length === 0) {
       const empty = document.createElement('li');
-      empty.className = 'm-empty';
-      empty.textContent = isTarget ? 'leer – unten Template antippen' : 'leer';
+      empty.className = 'm-seg-empty-hint';
+      empty.textContent = isTarget ? '+ Template antippen' : 'leer';
       list.appendChild(empty);
       return;
     }
@@ -178,7 +184,8 @@
 
   function renderPalette(state) {
     const track = activeTrack(state);
-    els.addTarget.textContent = state.spine.length ? `→ Abschnitt ${activeSeg + 1}` : '';
+    const seg = computeSchedule().rows.find((r) => r.kind === 'seg' && r.index === activeSeg);
+    els.addTarget.textContent = state.spine.length && seg ? `→ ab ${formatTime(seg.start)}` : '';
     els.tplButtons.innerHTML = '';
     if (state.templates.length === 0) {
       els.tplButtons.innerHTML = '<span class="m-empty">Keine Templates – unten anlegen.</span>';

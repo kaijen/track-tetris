@@ -180,6 +180,13 @@ input[type="color"] { padding: 2px; width: 44px; height: 40px; }
 .m-block-ctrls .c-del:active { background: var(--danger); color: #fff; }
 
 .m-empty { color: var(--muted); font-style: italic; padding: 0.6rem 1rem; text-align: center; }
+.m-seg-empty-hint {
+  color: var(--muted);
+  opacity: 0.6;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.6rem 0.4rem;
+  text-align: center;
+}
 
 /* Abschnitts-Kopf (Ziel-Auswahl) */
 .m-seg-head {
