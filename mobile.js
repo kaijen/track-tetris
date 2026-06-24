@@ -100,7 +100,7 @@
     list.innerHTML = '';
     for (const r of rows) {
       if (r.kind === 'plen') {
-        list.appendChild(buildPlenumItem(r.block, r.start));
+        list.appendChild(buildPlenumItem(r.block, r.start, r.index));
       } else if (hidden.has(r.index) && r.index !== activeSeg) {
         list.appendChild(buildAddParallel(r));
       } else {
@@ -112,15 +112,18 @@
   function buildAddParallel(row) {
     const li = document.createElement('li');
     li.className = 'm-add-parallel';
+    li.dataset.seg = String(row.index);
     li.textContent = '+ Parallel-Programm · ab ' + formatTime(row.start);
     li.addEventListener('click', () => { activeSeg = row.index; userPickedSeg = true; render(); });
     return li;
   }
 
-  function buildPlenumItem(block, startMin) {
+  function buildPlenumItem(block, startMin, plenIndex) {
     const li = document.createElement('li');
     li.className = 'm-plenum';
     li.style.setProperty('--block-color', block.color);
+    li.dataset.plen = String(plenIndex);
+    li.dataset.dur = String(block.duration);
     li.innerHTML = `
       <div class="m-block-main">
         <div class="m-block-time"></div>
@@ -169,6 +172,7 @@
       li.dataset.seg = String(segIndex);
       li.dataset.track = track.id;
       li.dataset.blockId = block.id;
+      li.dataset.dur = String(block.duration);
       li.innerHTML = `
         <div class="m-drag-handle" title="Ziehen zum Sortieren">⠿</div>
         <div class="m-block-main">
@@ -286,6 +290,62 @@
     e.preventDefault();
     drag.lastY = e.clientY;
     reposition(e.clientY);
+    liveRecompute();
+  }
+
+  /** Berechnet während des Ziehens alle angezeigten Zeiten neu – aus der
+   *  aktuellen DOM-Reihenfolge, ohne den State zu verändern. */
+  function liveRecompute() {
+    const state = getState();
+    const n = state.spine.length;
+
+    // Dauer je Abschnitt im aktiven Track aus der DOM-Reihenfolge
+    const domSeg = new Array(n + 1).fill(0);
+    let cur = null;
+    for (const el of els.blockList.children) {
+      if (el.dataset.segHead != null) cur = Number(el.dataset.segHead);
+      else if (el.classList.contains('m-block') && cur != null) domSeg[cur] += Number(el.dataset.dur) || 0;
+    }
+    // Abschnittsdauer = Maximum aus aktivem Track (DOM) und übrigen Tracks
+    const segDur = new Array(n + 1).fill(0);
+    for (let i = 0; i <= n; i++) {
+      let m = domSeg[i];
+      for (const tr of state.tracks) {
+        if (tr.id === activeTrackId) continue;
+        m = Math.max(m, (tr.segments[i] || []).reduce((s, b) => s + b.duration, 0));
+      }
+      segDur[i] = m;
+    }
+    // Startzeiten je Abschnitt und Plenum
+    const segStart = new Array(n + 1), plenStart = new Array(n);
+    let c = parseTime(state.startTime);
+    for (let i = 0; i <= n; i++) {
+      segStart[i] = c; c += segDur[i];
+      if (i < n) { plenStart[i] = c; c += state.spine[i].duration; }
+    }
+    // Labels aktualisieren
+    const prefix = n ? 'Parallel · ab ' : 'Programm · ab ';
+    cur = null; let bc = 0;
+    for (const el of els.blockList.children) {
+      if (el.dataset.segHead != null) {
+        cur = Number(el.dataset.segHead); bc = segStart[cur];
+        const span = el.querySelector('span'); if (span) span.textContent = prefix + formatTime(segStart[cur]);
+      } else if (el.classList.contains('m-add-parallel')) {
+        el.textContent = '+ Parallel-Programm · ab ' + formatTime(segStart[Number(el.dataset.seg)]);
+      } else if (el.classList.contains('m-plenum')) {
+        const i = Number(el.dataset.plen), dur = Number(el.dataset.dur) || 0;
+        const t = el.querySelector('.m-block-time');
+        if (t) t.textContent = formatTime(plenStart[i]) + ' – ' + formatTime(plenStart[i] + dur) + ' · alle Tracks';
+      } else if (el.classList.contains('m-block')) {
+        if (cur == null) { cur = 0; bc = segStart[0]; }
+        const dur = Number(el.dataset.dur) || 0;
+        const t = el.querySelector('.m-block-time');
+        if (t) t.textContent = formatTime(bc) + ' – ' + formatTime(bc + dur);
+        bc += dur;
+      }
+    }
+    els.trackSummary.textContent =
+      `${state.startTime}–${formatTime(c)} · Σ ${formatDuration(trackTotalDuration(activeTrack(state)))}`;
   }
 
   function autoScrollTick() {
