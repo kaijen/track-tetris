@@ -18,6 +18,7 @@
     tplName: document.getElementById('tplName'),
     tplDuration: document.getElementById('tplDuration'),
     tplColor: document.getElementById('tplColor'),
+    tplBlocking: document.getElementById('tplBlocking'),
     templateList: document.getElementById('templateList'),
     trackBoard: document.getElementById('trackBoard'),
     addTrackBtn: document.getElementById('addTrackBtn'),
@@ -57,7 +58,7 @@
     }
     for (const tpl of state.templates) {
       const li = document.createElement('li');
-      li.className = 'template-chip';
+      li.className = 'template-chip' + (tpl.blocking ? ' is-blocking' : '');
       li.draggable = true;
       li.style.setProperty('--chip-color', tpl.color);
       li.dataset.templateId = tpl.id;
@@ -70,10 +71,11 @@
           <button class="btn btn-icon" data-act="edit" title="Bearbeiten">✎</button>
           <button class="btn btn-icon" data-act="del" title="Löschen">🗑</button>
         </div>`;
-      li.querySelector('.tpl-name').textContent = tpl.name;
-      li.querySelector('.tpl-dur').textContent = formatDuration(tpl.duration);
+      li.querySelector('.tpl-name').textContent = (tpl.blocking ? '🔒 ' : '') + tpl.name;
+      li.querySelector('.tpl-dur').textContent =
+        formatDuration(tpl.duration) + (tpl.blocking ? ' · Plenum' : '');
       li.addEventListener('dragstart', (e) => {
-        dragData = { kind: 'template', templateId: tpl.id };
+        dragData = { kind: 'template', templateId: tpl.id, blocking: tpl.blocking };
         li.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'copy';
         e.dataTransfer.setData('text/plain', tpl.id);
@@ -297,11 +299,19 @@
     zone.addEventListener('drop', (e) => {
       if (!dragData) return;
       e.preventDefault();
-      const index = placeholderIndex(zone);
       if (dragData.kind === 'template') {
-        TT.addBlockFromTemplate(dragData.templateId, track.id, segIndex, index);
+        const tpl = getState().templates.find((t) => t.id === dragData.templateId);
+        if (tpl && tpl.blocking) {
+          // Blocking-Template -> Plenum an der nächstgelegenen Abschnittsgrenze
+          const rect = zone.getBoundingClientRect();
+          const upper = e.clientY < rect.top + rect.height / 2;
+          const at = Math.max(0, upper ? segIndex - 1 : segIndex);
+          TT.addBlocking({ name: tpl.name, duration: tpl.duration, color: tpl.color }, at);
+        } else {
+          TT.addBlockFromTemplate(dragData.templateId, track.id, segIndex, placeholderIndex(zone));
+        }
       } else if (dragData.kind === 'block') {
-        TT.moveBlock(dragData.trackId, dragData.segIndex, dragData.blockId, track.id, segIndex, index);
+        TT.moveBlock(dragData.trackId, dragData.segIndex, dragData.blockId, track.id, segIndex, placeholderIndex(zone));
       }
       clearPlaceholders();
     });
@@ -312,6 +322,15 @@
     zone.classList.add('drag-over');
     const ph = document.createElement('div');
     ph.className = 'block-drop-placeholder';
+    if (dragData && dragData.blocking) {
+      // Blocking-Template: Plenum oben oder unten am Abschnitt
+      ph.classList.add('plenum-drop');
+      const rect = zone.getBoundingClientRect();
+      const upper = clientY < rect.top + rect.height / 2;
+      if (upper) zone.insertBefore(ph, zone.firstChild);
+      else zone.appendChild(ph);
+      return;
+    }
     const blockEls = [...zone.querySelectorAll('.block:not(.dragging)')];
     const after = blockEls.find((el) => {
       const r = el.getBoundingClientRect();
@@ -350,18 +369,23 @@
       const label = document.createElement('label');
       label.textContent = f.label;
       const input = document.createElement('input');
-      input.type = f.type || 'text';
-      input.value = f.value ?? '';
+      input.type = f.type === 'check' ? 'checkbox' : (f.type || 'text');
+      if (f.type === 'check') { input.checked = !!f.value; wrap.classList.add('is-check'); }
+      else { input.value = f.value ?? ''; }
       if (f.type === 'number') { input.min = '1'; input.step = '1'; }
       const id = 'mf-' + f.key;
       input.id = id; label.htmlFor = id;
-      wrap.append(label, input);
+      if (f.type === 'check') wrap.append(input, label);
+      else wrap.append(label, input);
       els.modalFields.appendChild(wrap);
       inputs[f.key] = input;
     }
     modalSubmit = () => {
       const v = {};
-      for (const k of Object.keys(inputs)) v[k] = inputs[k].value;
+      for (const k of Object.keys(inputs)) {
+        const el = inputs[k];
+        v[k] = el.type === 'checkbox' ? el.checked : el.value;
+      }
       onSave(v);
     };
     els.modal.hidden = false;
@@ -414,6 +438,7 @@
       { key: 'name', label: 'Name', type: 'text', value: tpl.name },
       { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: tpl.duration },
       { key: 'color', label: 'Farbe', type: 'color', value: tpl.color },
+      { key: 'blocking', label: '🔒 Blocking (Plenum über alle Tracks)', type: 'check', value: tpl.blocking },
     ], (v) => { TT.updateTemplate(id, v); toast('Template aktualisiert. Bereits platzierte Blöcke bleiben unverändert.'); });
   }
 
@@ -437,8 +462,11 @@
   // =======================================================================
   els.templateForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const created = TT.addTemplate({ name: els.tplName.value, duration: els.tplDuration.value, color: els.tplColor.value });
-    if (created) { els.tplName.value = ''; els.tplDuration.value = '30'; els.tplName.focus(); }
+    const created = TT.addTemplate({
+      name: els.tplName.value, duration: els.tplDuration.value,
+      color: els.tplColor.value, blocking: els.tplBlocking.checked,
+    });
+    if (created) { els.tplName.value = ''; els.tplDuration.value = '30'; els.tplBlocking.checked = false; els.tplName.focus(); }
   });
 
   els.startTime.addEventListener('change', () => TT.setStartTime(els.startTime.value));

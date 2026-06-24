@@ -205,6 +205,12 @@ input[type="color"] { padding: 2px; width: 44px; height: 40px; }
 }
 .m-tpl-add:active { background: #2c3744; }
 .m-tpl-add .d { color: var(--muted); font-size: 0.78rem; }
+.m-tpl-add.is-blocking { box-shadow: inset 0 0 0 1px var(--chip-color, var(--primary)); }
+.m-check { display: flex; align-items: center; gap: 0.5rem; color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
+.m-check input { width: auto; }
+.m-modal-fields .modal-field.is-check { flex-direction: row; align-items: center; gap: 0.5rem; }
+.m-modal-fields .modal-field.is-check input { width: auto; }
+.m-modal-fields .modal-field.is-check label { text-transform: none; color: var(--text); }
 
 /* Templates verwalten */
 .m-manage { padding: 0.8rem; border-top: 1px solid var(--border); }

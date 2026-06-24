@@ -27,6 +27,7 @@
     tplName: document.getElementById('tplName'),
     tplDuration: document.getElementById('tplDuration'),
     tplColor: document.getElementById('tplColor'),
+    tplBlocking: document.getElementById('tplBlocking'),
     tplManageList: document.getElementById('tplManageList'),
     toast: document.getElementById('toast'),
     modal: document.getElementById('modal'),
@@ -179,13 +180,19 @@
     }
     for (const tpl of state.templates) {
       const b = document.createElement('button');
-      b.className = 'm-tpl-add';
+      b.className = 'm-tpl-add' + (tpl.blocking ? ' is-blocking' : '');
       b.style.setProperty('--chip-color', tpl.color);
-      b.innerHTML = `<div>${escapeHtml(tpl.name)}</div><div class="d">${formatDuration(tpl.duration)}</div>`;
+      b.innerHTML = `<div>${(tpl.blocking ? '🔒 ' : '') + escapeHtml(tpl.name)}</div>` +
+        `<div class="d">${formatDuration(tpl.duration)}${tpl.blocking ? ' · Plenum' : ''}</div>`;
       b.addEventListener('click', () => {
         if (!track) return;
-        TT.addBlockFromTemplate(tpl.id, track.id, activeSeg, null);
-        toast(`„${tpl.name}" hinzugefügt.`);
+        if (tpl.blocking) {
+          TT.addBlocking({ name: tpl.name, duration: tpl.duration, color: tpl.color }, activeSeg);
+          toast(`Plenum „${tpl.name}" hinzugefügt.`);
+        } else {
+          TT.addBlockFromTemplate(tpl.id, track.id, activeSeg, null);
+          toast(`„${tpl.name}" hinzugefügt.`);
+        }
       });
       els.tplButtons.appendChild(b);
     }
@@ -202,7 +209,7 @@
         <span class="dur"></span>
         <button data-act="edit" title="Bearbeiten">✎</button>
         <button data-act="del" title="Löschen">🗑</button>`;
-      li.querySelector('.name').textContent = tpl.name;
+      li.querySelector('.name').textContent = (tpl.blocking ? '🔒 ' : '') + tpl.name;
       li.querySelector('.dur').textContent = formatDuration(tpl.duration);
       li.querySelector('[data-act="edit"]').addEventListener('click', () => editTemplate(tpl.id));
       li.querySelector('[data-act="del"]').addEventListener('click', () => deleteTemplate(tpl.id));
@@ -224,18 +231,23 @@
       const label = document.createElement('label');
       label.textContent = f.label;
       const input = document.createElement('input');
-      input.type = f.type || 'text';
-      input.value = f.value ?? '';
+      input.type = f.type === 'check' ? 'checkbox' : (f.type || 'text');
+      if (f.type === 'check') { input.checked = !!f.value; wrap.classList.add('is-check'); }
+      else { input.value = f.value ?? ''; }
       if (f.type === 'number') { input.min = '1'; input.step = '1'; input.inputMode = 'numeric'; }
       const id = 'mf-' + f.key;
       input.id = id; label.htmlFor = id;
-      wrap.append(label, input);
+      if (f.type === 'check') wrap.append(input, label);
+      else wrap.append(label, input);
       els.modalFields.appendChild(wrap);
       inputs[f.key] = input;
     }
     modalSubmit = () => {
       const v = {};
-      for (const k of Object.keys(inputs)) v[k] = inputs[k].value;
+      for (const k of Object.keys(inputs)) {
+        const el = inputs[k];
+        v[k] = el.type === 'checkbox' ? el.checked : el.value;
+      }
       onSave(v);
     };
     els.modal.hidden = false;
@@ -277,6 +289,7 @@
       { key: 'name', label: 'Name', type: 'text', value: tpl.name },
       { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: tpl.duration },
       { key: 'color', label: 'Farbe', type: 'color', value: tpl.color },
+      { key: 'blocking', label: '🔒 Blocking (Plenum über alle Tracks)', type: 'check', value: tpl.blocking },
     ], (v) => { TT.updateTemplate(id, v); toast('Template aktualisiert.'); });
   }
 
@@ -324,8 +337,11 @@
 
   els.templateForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const created = TT.addTemplate({ name: els.tplName.value, duration: els.tplDuration.value, color: els.tplColor.value });
-    if (created) { els.tplName.value = ''; els.tplDuration.value = '30'; toast('Template angelegt.'); }
+    const created = TT.addTemplate({
+      name: els.tplName.value, duration: els.tplDuration.value,
+      color: els.tplColor.value, blocking: els.tplBlocking.checked,
+    });
+    if (created) { els.tplName.value = ''; els.tplDuration.value = '30'; els.tplBlocking.checked = false; toast('Template angelegt.'); }
   });
 
   els.startTime.addEventListener('change', () => TT.setStartTime(els.startTime.value));

@@ -103,6 +103,7 @@
         name: String(t.name ?? 'Template'),
         duration: clampDuration(t.duration),
         color: validColor(t.color),
+        blocking: !!t.blocking,
       }));
     }
     if (Array.isArray(data.spine)) out.spine = data.spine.map(normPlenary);
@@ -206,20 +207,21 @@
   }
 
   // ---- Template mutations ------------------------------------------------
-  function addTemplate({ name, duration, color }) {
+  function addTemplate({ name, duration, color, blocking }) {
     const n = String(name || '').trim();
     if (!n) return null;
-    const tpl = { id: uid(), name: n, duration: clampDuration(duration), color: validColor(color) };
+    const tpl = { id: uid(), name: n, duration: clampDuration(duration), color: validColor(color), blocking: !!blocking };
     state.templates.push(tpl);
     notify();
     return tpl;
   }
-  function updateTemplate(id, { name, duration, color }) {
+  function updateTemplate(id, { name, duration, color, blocking }) {
     const tpl = state.templates.find((t) => t.id === id);
     if (!tpl) return;
     if (name != null && String(name).trim()) tpl.name = String(name).trim();
     if (duration != null) tpl.duration = clampDuration(duration);
     if (color != null) tpl.color = validColor(color);
+    if (blocking != null) tpl.blocking = !!blocking;
     notify();
   }
   function deleteTemplate(id) {

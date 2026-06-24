@@ -14,10 +14,13 @@ Teilen erfolgt über JSON-Dateien.
 - **Proportionale Zeitachse**: Blockhöhe entspricht der Dauer; ein gemeinsames
   Zeit-Lineal links und ausgerichtete Track-Spalten machen parallele Slots über
   alle Tracks hinweg vergleichbar. Zoom (px/min) per +/−.
-- **Plenum- / Blocking-Blöcke** (`🔒 + Plenum`): Blöcke, die über ALLE Tracks
-  laufen (Begrüßung, Keynote, Closing). Sie wirken als Synchronisationspunkt –
-  nach einem Plenum starten alle Tracks gemeinsam wieder; ist ein paralleler
-  Abschnitt in einem Track kürzer, „wartet" er bis zum nächsten Plenum.
+- **Plenum- / Blocking-Blöcke**: Blöcke, die über ALLE Tracks laufen
+  (Begrüßung, Keynote, Closing). Sie wirken als Synchronisationspunkt – nach
+  einem Plenum starten alle Tracks gemeinsam wieder; ist ein paralleler
+  Abschnitt in einem Track kürzer, „wartet" er bis zum nächsten Plenum. Anlegen
+  per `🔒 + Plenum` oder – dauerhaft wiederverwendbar – als **Template mit dem
+  Häkchen „Blocking"**: ein solches Template ins Board ziehen (Desktop) bzw.
+  antippen (Mobil) erzeugt automatisch ein Plenum statt eines normalen Blocks.
 - **Lücken / Pausen**: Leerzeit-Blöcke innerhalb eines Abschnitts einfügen.
 - **Blöcke direkt bearbeiten**: Doppelklick (oder ✎ am Block) öffnet einen
   Dialog für Name, Dauer und Farbe – unabhängig vom ursprünglichen Template.
