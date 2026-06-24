@@ -39,6 +39,7 @@
 
   let activeTrackId = null;
   let activeSeg = 0;
+  let userPickedSeg = false; // hat der Nutzer den Ziel-Abschnitt bewusst gewählt?
 
   function activeTrack(state) {
     let tr = state.tracks.find((t) => t.id === activeTrackId);
@@ -70,7 +71,7 @@
       const b = document.createElement('button');
       b.className = 'm-tab' + (track === tr ? ' active' : '');
       b.textContent = track.name;
-      b.addEventListener('click', () => { activeTrackId = track.id; render(); });
+      b.addEventListener('click', () => { activeTrackId = track.id; userPickedSeg = false; render(); });
       els.trackTabs.appendChild(b);
     }
     const add = document.createElement('button');
@@ -86,8 +87,9 @@
     if (!track) return;
     const { rows, totalEnd } = computeSchedule();
     const hidden = TT.hiddenSegments();
-    // Aktiven Abschnitt auf einen sichtbaren legen, falls er ausgeblendet wurde
-    if (hidden.has(activeSeg)) {
+    // Default-Ziel = letzter sichtbarer Abschnitt, solange der Nutzer nichts
+    // anderes gewählt hat.
+    if (!userPickedSeg || activeSeg >= state.spine.length + 1) {
       const vis = rows.filter((r) => r.kind === 'seg' && !hidden.has(r.index)).map((r) => r.index);
       if (vis.length) activeSeg = vis[vis.length - 1];
     }
@@ -99,10 +101,20 @@
     for (const r of rows) {
       if (r.kind === 'plen') {
         list.appendChild(buildPlenumItem(r.block, r.start));
-      } else if (!hidden.has(r.index)) {
+      } else if (hidden.has(r.index) && r.index !== activeSeg) {
+        list.appendChild(buildAddParallel(r));
+      } else {
         buildSegGroup(state, track, r, list);
       }
     }
+  }
+
+  function buildAddParallel(row) {
+    const li = document.createElement('li');
+    li.className = 'm-add-parallel';
+    li.textContent = '+ Parallel-Programm · ab ' + formatTime(row.start);
+    li.addEventListener('click', () => { activeSeg = row.index; userPickedSeg = true; render(); });
+    return li;
   }
 
   function buildPlenumItem(block, startMin) {
@@ -137,7 +149,7 @@
     header.innerHTML = `<span></span><span class="m-seg-pick">${isTarget ? '● Ziel' : 'hierher'}</span>`;
     header.querySelector('span').textContent =
       (state.spine.length ? 'Parallel · ab ' : 'Programm · ab ') + formatTime(row.start);
-    header.addEventListener('click', () => { activeSeg = segIndex; render(); });
+    header.addEventListener('click', () => { activeSeg = segIndex; userPickedSeg = true; render(); });
     list.appendChild(header);
 
     if (blocks.length === 0) {
@@ -462,6 +474,7 @@
     TT.reset();
     activeTrackId = null;
     activeSeg = 0;
+    userPickedSeg = false;
   });
 
   // =======================================================================

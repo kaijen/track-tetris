@@ -197,9 +197,8 @@
     const n = state.spine.length;
     const hidden = new Set();
     if (n > 0) {
-      if (segmentGloballyEmpty(0)) hidden.add(0);
-      if (segmentGloballyEmpty(n)) hidden.add(n);
-      if (hidden.size >= n + 1) hidden.delete(n);
+      for (let i = 0; i <= n; i++) if (segmentGloballyEmpty(i)) hidden.add(i);
+      if (hidden.size >= n + 1) hidden.delete(n); // mind. ein Abschnitt sichtbar
     }
     return hidden;
   }

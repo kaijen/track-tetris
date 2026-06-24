@@ -187,6 +187,16 @@ input[type="color"] { padding: 2px; width: 44px; height: 40px; }
   padding: 0.25rem 0.6rem 0.4rem;
   text-align: center;
 }
+.m-add-parallel {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 0.4rem 0.6rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.m-add-parallel:active { background: rgba(79, 140, 255, 0.08); border-color: var(--primary); color: var(--text); }
 
 /* Abschnitts-Kopf (Ziel-Auswahl) */
 .m-seg-head {

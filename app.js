@@ -9,8 +9,9 @@
     findTrack, computeSchedule, blocksDur, trackSegment, trackTotalDuration,
   } = TT;
 
-  const MIN_SEG_EMPTY = 48; // px Höhe für leere Abschnitte (Drop-Ziel)
+  const MIN_SEG_EMPTY = 48; // px Höhe für (sichtbare) leere Abschnitte
   const MIN_PLEN = 30;      // px Mindesthöhe Plenum-Band
+  const SLIM_SEG = 16;      // px Höhe für ausgeblendete leere Abschnitte
 
   const els = {
     startTime: document.getElementById('startTime'),
@@ -94,14 +95,15 @@
     const tick = tickMinutes(px);
     const schedule = computeSchedule();
     const hidden = TT.hiddenSegments();
-    // Leere führende/abschließende Abschnitte ausblenden (dur 0 -> keine Zeit-
-    // verschiebung); restliche Zeilen für Lineal und Tracks gemeinsam nutzen.
-    const rows = schedule.rows.filter((r) => r.kind !== 'seg' || !hidden.has(r.index));
+    const rows = schedule.rows;
 
-    // Pixelhöhe je Zeile (Abschnitt bzw. Plenum) – identisch für Lineal und Tracks
-    const rowPx = rows.map((r) => r.kind === 'plen'
-      ? Math.max(r.dur * px, MIN_PLEN)
-      : (r.dur > 0 ? r.dur * px : MIN_SEG_EMPTY));
+    // Pixelhöhe je Zeile – identisch für Lineal und Tracks. Komplett leere
+    // Abschnitte (dur 0) werden zu einem schmalen "+ Parallel"-Streifen.
+    const rowPx = rows.map((r) => {
+      if (r.kind === 'plen') return Math.max(r.dur * px, MIN_PLEN);
+      if (hidden.has(r.index)) return SLIM_SEG;
+      return r.dur > 0 ? r.dur * px : MIN_SEG_EMPTY;
+    });
 
     board.style.setProperty('--tick-px', (tick * px) + 'px');
 
@@ -114,12 +116,14 @@
     const rulerBody = document.createElement('div');
     rulerBody.className = 'ruler-body';
     rows.forEach((r, idx) => {
+      const slim = r.kind === 'seg' && hidden.has(r.index);
       const cell = document.createElement('div');
       cell.className = 'ruler-cell ' + (r.kind === 'plen' ? 'is-plen' : 'is-seg');
       cell.style.height = rowPx[idx] + 'px';
-      cell.innerHTML = `<span class="ruler-time">${formatTime(r.start)}</span>`;
-      // Plenum hier einfügen (nach Abschnitt r.index)
-      if (r.kind === 'seg') {
+      // Zeit-Label nur, wenn es echte Zeit markiert (ausgeblendete 0-Min-
+      // Abschnitte hätten dieselbe Zeit wie das folgende Plenum -> weglassen)
+      if (!slim) cell.innerHTML = `<span class="ruler-time">${formatTime(r.start)}</span>`;
+      if (r.kind === 'seg' && !slim) {
         const ins = document.createElement('button');
         ins.className = 'ruler-insert';
         ins.title = 'Plenum nach diesem Abschnitt einfügen';
@@ -170,7 +174,7 @@
         if (r.kind === 'plen') {
           body.appendChild(buildPlenumBar(r.block, r.start, rowPx[idx]));
         } else {
-          body.appendChild(buildSegZone(track, r.index, r.start, r.dur, px, rowPx[idx]));
+          body.appendChild(buildSegZone(track, r.index, r.start, r.dur, px, rowPx[idx], hidden.has(r.index)));
         }
       });
 
@@ -206,12 +210,23 @@
     return el;
   }
 
-  function buildSegZone(track, segIndex, segStart, segDur, px, heightPx) {
+  function buildSegZone(track, segIndex, segStart, segDur, px, heightPx, slim) {
     const zone = document.createElement('div');
-    zone.className = 'seg-zone';
+    zone.className = 'seg-zone' + (slim ? ' is-slim' : '');
     zone.style.height = heightPx + 'px';
     zone.dataset.trackId = track.id;
     zone.dataset.segIndex = String(segIndex);
+
+    if (slim) {
+      // Komplett leerer Abschnitt: nur dezenter Drop-Streifen
+      const hint = document.createElement('div');
+      hint.className = 'seg-slim-hint';
+      hint.textContent = '+ Parallel';
+      hint.title = 'Hier Parallel-Programm einfügen (Template hierher ziehen)';
+      zone.appendChild(hint);
+      setupSegDnD(zone, track, segIndex);
+      return zone;
+    }
 
     const blocks = trackSegment(track, segIndex);
     let cursor = segStart;
