@@ -26,6 +26,8 @@ Teilen erfolgt über JSON-Dateien.
   Dialog für Name, Dauer und Farbe – unabhängig vom ursprünglichen Template.
 - **Automatische Zeitberechnung** ab einer frei wählbaren Startzeit – pro Block
   und als Track-Gesamtdauer.
+- **Konferenztitel** im Kopfbereich; daraus wird der Export-Dateiname
+  abgeleitet (Slug, Umlaute werden umgeschrieben; ohne Titel Fallback mit Datum).
 - **Export / Import** des gesamten Zustands als JSON.
 - **Auto-Speicherung** der laufenden Sitzung im Browser (localStorage); die
   „echte" Persistenz bleibt aber die vom Nutzer verwaltete JSON-Datei.

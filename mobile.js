@@ -9,6 +9,7 @@
   const { getState, subscribe, formatTime, formatDuration, findTrack, computeSchedule, trackTotalDuration } = TT;
 
   const els = {
+    confTitle: document.getElementById('confTitle'),
     startTime: document.getElementById('startTime'),
     exportBtn: document.getElementById('exportBtn'),
     importBtn: document.getElementById('importBtn'),
@@ -57,6 +58,7 @@
   function render() {
     const state = getState();
     clampSeg(state);
+    if (document.activeElement !== els.confTitle) els.confTitle.value = state.title;
     els.startTime.value = state.startTime;
     renderTabs(state);
     renderPanel(state);
@@ -508,6 +510,7 @@
     if (created) { els.tplName.value = ''; els.tplDuration.value = '30'; els.tplBlocking.checked = false; toast('Template angelegt.'); }
   });
 
+  els.confTitle.addEventListener('input', () => TT.setTitle(els.confTitle.value));
   els.startTime.addEventListener('change', () => TT.setStartTime(els.startTime.value));
 
   els.exportBtn.addEventListener('click', () => {
@@ -515,7 +518,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `konferenz-zeitplan-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = TT.exportFilename(new Date().toISOString().slice(0, 10));
     a.click();
     URL.revokeObjectURL(url);
     toast('Als JSON exportiert.');

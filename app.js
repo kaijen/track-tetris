@@ -14,6 +14,7 @@
   const SLIM_SEG = 16;      // px Höhe für ausgeblendete leere Abschnitte
 
   const els = {
+    confTitle: document.getElementById('confTitle'),
     startTime: document.getElementById('startTime'),
     templateForm: document.getElementById('templateForm'),
     tplName: document.getElementById('tplName'),
@@ -44,6 +45,7 @@
   // =======================================================================
   function render() {
     const state = getState();
+    if (document.activeElement !== els.confTitle) els.confTitle.value = state.title;
     els.startTime.value = state.startTime;
     els.zoomLabel.textContent = state.pxPerMin.toFixed(1) + ' px/min';
     renderTemplates(state);
@@ -488,6 +490,7 @@
     if (created) { els.tplName.value = ''; els.tplDuration.value = '30'; els.tplBlocking.checked = false; els.tplName.focus(); }
   });
 
+  els.confTitle.addEventListener('input', () => TT.setTitle(els.confTitle.value));
   els.startTime.addEventListener('change', () => TT.setStartTime(els.startTime.value));
   els.zoomIn.addEventListener('click', () => TT.stepZoom(1));
   els.zoomOut.addEventListener('click', () => TT.stepZoom(-1));
@@ -502,7 +505,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `konferenz-zeitplan-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = TT.exportFilename(new Date().toISOString().slice(0, 10));
     a.click();
     URL.revokeObjectURL(url);
     toast('Als JSON exportiert.');

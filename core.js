@@ -39,6 +39,7 @@
   function defaultState() {
     return {
       version: SCHEMA_VERSION,
+      title: '',
       startTime: '09:00',
       pxPerMin: DEFAULT_PX,
       templates: [
@@ -90,6 +91,7 @@
     if (!data || typeof data !== 'object') throw new Error('Ungültiges Format');
     const out = {
       version: SCHEMA_VERSION,
+      title: typeof data.title === 'string' ? data.title.slice(0, 120) : '',
       startTime: typeof data.startTime === 'string' && /^\d{1,2}:\d{2}$/.test(data.startTime)
         ? data.startTime : '09:00',
       pxPerMin: clampPx(data.pxPerMin),
@@ -377,6 +379,25 @@
   }
 
   // ---- Settings ----------------------------------------------------------
+  function setTitle(t) {
+    state.title = String(t || '').slice(0, 120);
+    notify();
+  }
+  /** Slug für Dateinamen aus dem Konferenztitel. */
+  function slug(str) {
+    return String(str || '')
+      .trim().toLowerCase()
+      .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80);
+  }
+  /** Dateiname für den Export, abgeleitet aus dem Titel (Fallback mit Datum). */
+  function exportFilename(dateStr) {
+    const base = slug(state.title);
+    return (base || 'konferenz-zeitplan-' + dateStr) + '.json';
+  }
+
   function setStartTime(t) {
     state.startTime = /^\d{1,2}:\d{2}$/.test(t) ? t : '09:00';
     notify();
@@ -415,7 +436,7 @@
     // blocks
     addBlockFromTemplate, addGap, updateBlock, removeBlock, moveBlock, nudgeBlock,
     // settings
-    setStartTime, setZoom, stepZoom,
+    setTitle, slug, exportFilename, setStartTime, setZoom, stepZoom,
     // io
     toJSON, importJSON, reset,
   };
