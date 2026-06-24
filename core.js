@@ -340,8 +340,9 @@
     if (i === -1) return;
     const [moved] = sArr.splice(i, 1);
     const dArr = dest.segments[destSeg];
-    let insertAt = index == null ? dArr.length : index;
-    if (sArr === dArr && i < insertAt) insertAt -= 1;
+    // index zählt die NICHT gezogenen Blöcke vor der Zielposition (Platzhalter-
+    // Konvention), gilt also für das Array OHNE den entnommenen Block -> direkt.
+    let insertAt = index == null ? dArr.length : Math.min(index, dArr.length);
     dArr.splice(insertAt, 0, moved);
     notify();
   }

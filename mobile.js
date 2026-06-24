@@ -147,7 +147,11 @@
       const li = document.createElement('li');
       li.className = 'm-block' + (block.isGap ? ' is-gap' : '');
       li.style.setProperty('--block-color', block.color);
+      li.dataset.seg = String(segIndex);
+      li.dataset.track = track.id;
+      li.dataset.blockId = block.id;
       li.innerHTML = `
+        <div class="m-drag-handle" title="Ziehen zum Sortieren">⠿</div>
         <div class="m-block-main">
           <div class="m-block-time"></div>
           <div class="m-block-name"></div>
@@ -159,6 +163,7 @@
           <button class="c-down" title="Nach unten" ${i === blocks.length - 1 ? 'disabled' : ''}>↓</button>
           <button class="c-del" title="Entfernen">🗑</button>
         </div>`;
+      setupDragHandle(li.querySelector('.m-drag-handle'), li);
       li.querySelector('.m-block-time').textContent = formatTime(start) + ' – ' + formatTime(start + block.duration);
       li.querySelector('.m-block-name').textContent = block.name;
       li.querySelector('.m-block-dur').textContent = formatDuration(block.duration);
@@ -215,6 +220,62 @@
       li.querySelector('[data-act="del"]').addEventListener('click', () => deleteTemplate(tpl.id));
       list.appendChild(li);
     }
+  }
+
+  // =======================================================================
+  //  TOUCH DRAG & DROP (Sortieren innerhalb eines Abschnitts)
+  // =======================================================================
+  let drag = null;
+
+  function setupDragHandle(handle, li) {
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button > 0) return;
+      drag = { li, seg: li.dataset.seg, track: li.dataset.track, blockId: li.dataset.blockId, pointerId: e.pointerId, handle };
+      li.classList.add('m-dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      e.preventDefault();
+    });
+    handle.addEventListener('pointermove', dragMove);
+    handle.addEventListener('pointerup', dragEnd);
+    handle.addEventListener('pointercancel', dragEnd);
+  }
+
+  function sameSegBlocks() {
+    return [...els.blockList.children].filter(
+      (el) => el.classList.contains('m-block') && el.dataset.seg === drag.seg);
+  }
+
+  function dragMove(e) {
+    if (!drag) return;
+    e.preventDefault();
+    const y = e.clientY;
+    const sibs = sameSegBlocks().filter((el) => el !== drag.li);
+    let ref = null;
+    for (const el of sibs) {
+      const r = el.getBoundingClientRect();
+      if (y < r.top + r.height / 2) { ref = el; break; }
+    }
+    if (ref) {
+      if (drag.li.nextSibling !== ref) els.blockList.insertBefore(drag.li, ref);
+    } else {
+      const last = sibs[sibs.length - 1];
+      if (last && last.nextSibling !== drag.li) els.blockList.insertBefore(drag.li, last.nextSibling);
+    }
+  }
+
+  function dragEnd() {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    d.li.classList.remove('m-dragging');
+    try { d.handle.releasePointerCapture(d.pointerId); } catch (_) { /* ignore */ }
+    // Zielindex = Anzahl gleicher-Abschnitt-Blöcke vor dem gezogenen Element
+    let index = 0;
+    for (const el of els.blockList.children) {
+      if (el === d.li) break;
+      if (el.classList.contains('m-block') && el.dataset.seg === d.seg) index++;
+    }
+    TT.moveBlock(d.track, Number(d.seg), d.blockId, d.track, Number(d.seg), index);
   }
 
   // =======================================================================
