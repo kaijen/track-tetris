@@ -47,9 +47,9 @@ Oder `index.html` direkt per Doppelklick öffnen.
 - **Desktop** (`index.html`): Puzzle-Board mit Drag & Drop und proportionaler
   Zeitachse.
 - **Mobil** (`mobile.html`): touch-optimiert – Templates antippen zum Hinzufügen,
-  Blöcke per Anfasser (⠿) im Touch-Drag oder per ↑/↓ sortieren. Beide teilen
-  denselben localStorage-Stand und dasselbe JSON-Format. Umschalten über die
-  Links in der Kopfzeile.
+  Blöcke per Anfasser (⠿) im Touch-Drag sortieren (auch abschnittsübergreifend,
+  mit Auto-Scroll am Rand) oder per ↑/↓. Beide teilen denselben localStorage-Stand
+  und dasselbe JSON-Format. Umschalten über die Links in der Kopfzeile.
 - **Auto-Weiterleitung**: Mobilgeräte landen automatisch auf `mobile.html`. Über
   „🖥 Desktop" (Link `index.html?desktop=1`) lässt sich das pro Sitzung übersteuern.
 

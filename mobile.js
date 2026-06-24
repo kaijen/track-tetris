@@ -127,6 +127,7 @@
 
     const header = document.createElement('li');
     header.className = 'm-seg-head' + (isTarget ? ' target' : '');
+    header.dataset.segHead = String(segIndex);
     header.innerHTML = `<span></span><span class="m-seg-pick">${isTarget ? '● Ziel' : 'hierher'}</span>`;
     header.querySelector('span').textContent =
       (state.spine.length ? `Abschnitt ${segIndex + 1}` : 'Programm') + ' · ab ' + formatTime(row.start);
@@ -226,13 +227,18 @@
   //  TOUCH DRAG & DROP (Sortieren innerhalb eines Abschnitts)
   // =======================================================================
   let drag = null;
+  const EDGE = 72; // px Randzone für Auto-Scroll
 
   function setupDragHandle(handle, li) {
     handle.addEventListener('pointerdown', (e) => {
       if (e.button != null && e.button > 0) return;
-      drag = { li, seg: li.dataset.seg, track: li.dataset.track, blockId: li.dataset.blockId, pointerId: e.pointerId, handle };
+      drag = {
+        li, seg: li.dataset.seg, track: li.dataset.track, blockId: li.dataset.blockId,
+        pointerId: e.pointerId, handle, lastY: e.clientY, timer: null,
+      };
       li.classList.add('m-dragging');
       try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      drag.timer = setInterval(autoScrollTick, 16);
       e.preventDefault();
     });
     handle.addEventListener('pointermove', dragMove);
@@ -240,42 +246,57 @@
     handle.addEventListener('pointercancel', dragEnd);
   }
 
-  function sameSegBlocks() {
-    return [...els.blockList.children].filter(
-      (el) => el.classList.contains('m-block') && el.dataset.seg === drag.seg);
-  }
-
-  function dragMove(e) {
-    if (!drag) return;
-    e.preventDefault();
-    const y = e.clientY;
-    const sibs = sameSegBlocks().filter((el) => el !== drag.li);
+  /** Schiebt das gezogene Element vor die erste Zeile, deren Mitte unter dem
+   *  Finger liegt – über alle Abschnitte und Plenum-Zeilen hinweg. */
+  function reposition(y) {
+    const rows = [...els.blockList.children].filter((el) => el !== drag.li);
     let ref = null;
-    for (const el of sibs) {
+    for (const el of rows) {
       const r = el.getBoundingClientRect();
       if (y < r.top + r.height / 2) { ref = el; break; }
     }
     if (ref) {
       if (drag.li.nextSibling !== ref) els.blockList.insertBefore(drag.li, ref);
-    } else {
-      const last = sibs[sibs.length - 1];
-      if (last && last.nextSibling !== drag.li) els.blockList.insertBefore(drag.li, last.nextSibling);
+    } else if (els.blockList.lastChild !== drag.li) {
+      els.blockList.appendChild(drag.li);
     }
+  }
+
+  function dragMove(e) {
+    if (!drag) return;
+    e.preventDefault();
+    drag.lastY = e.clientY;
+    reposition(e.clientY);
+  }
+
+  function autoScrollTick() {
+    if (!drag) return;
+    const y = drag.lastY;
+    const vh = window.innerHeight;
+    let dy = 0;
+    if (y < EDGE) dy = -Math.ceil((EDGE - y) / 6);
+    else if (y > vh - EDGE) dy = Math.ceil((y - (vh - EDGE)) / 6);
+    if (dy) { window.scrollBy(0, dy); reposition(y); }
   }
 
   function dragEnd() {
     if (!drag) return;
     const d = drag;
     drag = null;
+    clearInterval(d.timer);
     d.li.classList.remove('m-dragging');
     try { d.handle.releasePointerCapture(d.pointerId); } catch (_) { /* ignore */ }
-    // Zielindex = Anzahl gleicher-Abschnitt-Blöcke vor dem gezogenen Element
+
+    // Ziel-Abschnitt = letzter vorausgehender Abschnitts-Header; Index = Anzahl
+    // dortiger Blöcke vor dem gezogenen Element.
+    let destSeg = 0;
     let index = 0;
     for (const el of els.blockList.children) {
       if (el === d.li) break;
-      if (el.classList.contains('m-block') && el.dataset.seg === d.seg) index++;
+      if (el.dataset.segHead != null) { destSeg = Number(el.dataset.segHead); index = 0; }
+      else if (el.classList.contains('m-block') && Number(el.dataset.seg) === destSeg) index++;
     }
-    TT.moveBlock(d.track, Number(d.seg), d.blockId, d.track, Number(d.seg), index);
+    TT.moveBlock(d.track, Number(d.seg), d.blockId, d.track, destSeg, index);
   }
 
   // =======================================================================
