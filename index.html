@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track-Tetris – Konferenz-Zeitplaner</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <h1>🧩 Track-Tetris</h1>
+      <span class="subtitle">Konferenz-Rahmenzeitpläne puzzeln</span>
+    </div>
+    <div class="header-controls">
+      <label class="start-time">
+        Startzeit
+        <input type="time" id="startTime" value="09:00" />
+      </label>
+      <div class="header-buttons">
+        <button id="exportBtn" class="btn btn-secondary" title="Als JSON exportieren">⬇ Export</button>
+        <button id="importBtn" class="btn btn-secondary" title="JSON laden">⬆ Import</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden />
+        <button id="resetBtn" class="btn btn-ghost" title="Alles zurücksetzen">Zurücksetzen</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Template-Palette -->
+    <aside class="palette panel">
+      <div class="panel-head">
+        <h2>Templates</h2>
+        <span class="hint">Ziehe Blöcke in Tracks</span>
+      </div>
+
+      <form id="templateForm" class="template-form">
+        <input type="text" id="tplName" placeholder="Name (z.B. Keynote)" required />
+        <div class="row">
+          <input type="number" id="tplDuration" placeholder="Min." min="1" value="30" required />
+          <input type="color" id="tplColor" value="#4f8cff" title="Farbe" />
+          <button type="submit" class="btn btn-primary">+ Neu</button>
+        </div>
+      </form>
+
+      <ul id="templateList" class="template-list"></ul>
+    </aside>
+
+    <!-- Track-Board -->
+    <section class="board panel">
+      <div class="panel-head">
+        <h2>Tracks</h2>
+        <button id="addTrackBtn" class="btn btn-primary">+ Track</button>
+      </div>
+      <div id="trackBoard" class="track-board"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
