@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Track-Tetris Mobil</title>
+  <link rel="stylesheet" href="mobile.css?v=7c915bd" />
+</head>
+<body>
+  <header class="m-header">
+    <div class="m-title">
+      <strong>🧩 Track-Tetris</strong>
+      <a href="index.html?desktop=1" class="m-link" title="Desktop-Version">🖥 Desktop</a>
+    </div>
+    <input type="text" id="confTitle" class="m-conf-title" placeholder="Konferenztitel …" maxlength="120" />
+    <div class="m-controls">
+      <label class="m-start">
+        Start
+        <input type="time" id="startTime" value="09:00" />
+      </label>
+      <div class="m-iobtns">
+        <button id="exportBtn" class="m-btn" title="Export">⬇</button>
+        <button id="importBtn" class="m-btn" title="Import">⬆</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden />
+        <button id="resetBtn" class="m-btn" title="Zurücksetzen">↺</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Track-Auswahl -->
+  <nav class="m-tabs" id="trackTabs"></nav>
+
+  <!-- Aktiver Track: Zeitplan -->
+  <section class="m-panel">
+    <div class="m-panel-head">
+      <span id="trackSummary" class="m-summary"></span>
+      <div class="m-track-actions">
+        <button id="addPlenumBtn" class="m-btn" title="Plenum über alle Tracks">🔒+</button>
+        <button id="renameTrackBtn" class="m-btn" title="Track umbenennen">✎</button>
+        <button id="delTrackBtn" class="m-btn" title="Track löschen">🗑</button>
+      </div>
+    </div>
+    <ul id="blockList" class="m-blocks"></ul>
+  </section>
+
+  <!-- Hinzufügen: Templates antippen -->
+  <section class="m-palette">
+    <h2>Antippen zum Hinzufügen <span id="addTarget" class="m-target"></span></h2>
+    <div id="tplButtons" class="m-tpl-buttons"></div>
+    <button id="addGapBtn" class="m-btn m-wide">+ Pause / Lücke</button>
+  </section>
+
+  <!-- Templates verwalten -->
+  <details class="m-manage">
+    <summary>Templates verwalten</summary>
+    <form id="templateForm" class="m-tpl-form">
+      <input type="text" id="tplName" placeholder="Name (z.B. Keynote)" required />
+      <div class="m-row">
+        <input type="number" id="tplDuration" placeholder="Min." min="1" value="30" required />
+        <input type="color" id="tplColor" value="#4f8cff" />
+        <button type="submit" class="m-btn m-primary">+ Neu</button>
+      </div>
+      <label class="m-check"><input type="checkbox" id="tplBlocking" /> 🔒 Blocking (über alle Tracks)</label>
+    </form>
+    <ul id="tplManageList" class="m-tpl-manage"></ul>
+  </details>
+
+  <!-- Edit-Dialog -->
+  <div id="modal" class="m-modal-overlay" hidden>
+    <form id="modalForm" class="m-modal">
+      <h3 id="modalTitle"></h3>
+      <div id="modalFields" class="m-modal-fields"></div>
+      <div class="m-modal-actions">
+        <button type="button" id="modalCancel" class="m-btn">Abbrechen</button>
+        <button type="submit" class="m-btn m-primary">Speichern</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toast" class="m-toast" hidden></div>
+
+  <script src="core.js?v=7c915bd"></script>
+  <script src="mobile.js?v=7c915bd"></script>
+</body>
+</html>
