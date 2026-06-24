@@ -11,6 +11,13 @@ Teilen erfolgt über JSON-Dateien.
 - **Tracks** beliebig hinzufügen, umbenennen, löschen.
 - **Drag & Drop**: Templates aus der Palette in Tracks ziehen, Blöcke zwischen
   und innerhalb von Tracks frei umsortieren.
+- **Proportionale Zeitachse**: Blockhöhe entspricht der Dauer; ein gemeinsames
+  Zeit-Lineal links und ausgerichtete Track-Spalten machen parallele Slots über
+  alle Tracks hinweg vergleichbar. Zoom (px/min) per +/−.
+- **Lücken / Pausen** (`+ Lücke`): Leerzeit-Blöcke einfügen, um nachfolgende
+  Blöcke nach unten zu schieben und Tracks miteinander zu synchronisieren.
+- **Blöcke direkt bearbeiten**: Doppelklick (oder ✎ am Block) öffnet einen
+  Dialog für Name, Dauer und Farbe – unabhängig vom ursprünglichen Template.
 - **Automatische Zeitberechnung** ab einer frei wählbaren Startzeit – pro Block
   und als Track-Gesamtdauer.
 - **Export / Import** des gesamten Zustands als JSON.
@@ -43,6 +50,7 @@ Oder `index.html` direkt per Doppelklick öffnen.
 {
   "version": 1,
   "startTime": "09:00",
+  "pxPerMin": 1.8,
   "templates": [
     { "id": "…", "name": "Keynote", "duration": 45, "color": "#4f8cff" }
   ],
@@ -51,7 +59,7 @@ Oder `index.html` direkt per Doppelklick öffnen.
       "id": "…",
       "name": "Track A",
       "blocks": [
-        { "id": "…", "templateId": "…", "name": "Keynote", "duration": 45, "color": "#4f8cff" }
+        { "id": "…", "templateId": "…", "name": "Keynote", "duration": 45, "color": "#4f8cff", "isGap": false }
       ]
     }
   ]

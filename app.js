@@ -7,14 +7,19 @@
   const STORAGE_KEY = 'track-tetris-state-v1';
   const SCHEMA_VERSION = 1;
 
+  // Zoom (Pixel pro Minute) für die Zeitachse
+  const PX_STEPS = [0.8, 1.2, 1.8, 2.6, 3.6, 5];
+  const DEFAULT_PX = 1.8;
+
   // ---- State -------------------------------------------------------------
-  /** @type {{version:number,startTime:string,templates:Array,tracks:Array}} */
+  /** @type {{version:number,startTime:string,pxPerMin:number,templates:Array,tracks:Array}} */
   let state = loadState() || defaultState();
 
   function defaultState() {
     return {
       version: SCHEMA_VERSION,
       startTime: '09:00',
+      pxPerMin: DEFAULT_PX,
       templates: [
         { id: uid(), name: 'Keynote', duration: 45, color: '#4f8cff' },
         { id: uid(), name: 'Workshop', duration: 90, color: '#36c98f' },
@@ -47,6 +52,14 @@
     importFile: document.getElementById('importFile'),
     resetBtn: document.getElementById('resetBtn'),
     toast: document.getElementById('toast'),
+    zoomIn: document.getElementById('zoomIn'),
+    zoomOut: document.getElementById('zoomOut'),
+    zoomLabel: document.getElementById('zoomLabel'),
+    modal: document.getElementById('modal'),
+    modalForm: document.getElementById('modalForm'),
+    modalTitle: document.getElementById('modalTitle'),
+    modalFields: document.getElementById('modalFields'),
+    modalCancel: document.getElementById('modalCancel'),
   };
 
   // ---- Persistence -------------------------------------------------------
@@ -73,6 +86,7 @@
       version: SCHEMA_VERSION,
       startTime: typeof data.startTime === 'string' && /^\d{1,2}:\d{2}$/.test(data.startTime)
         ? data.startTime : '09:00',
+      pxPerMin: clampPx(data.pxPerMin),
       templates: [],
       tracks: [],
     };
@@ -94,6 +108,7 @@
           name: String(b.name ?? 'Block'),
           duration: clampDuration(b.duration),
           color: validColor(b.color),
+          isGap: !!b.isGap,
         })) : [],
       }));
     }
@@ -104,6 +119,10 @@
   function clampDuration(d) {
     const n = Math.round(Number(d));
     return Number.isFinite(n) && n > 0 ? n : 30;
+  }
+  function clampPx(p) {
+    const n = Number(p);
+    return Number.isFinite(n) && n >= 0.4 && n <= 8 ? n : DEFAULT_PX;
   }
   function validColor(c) {
     return typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : '#4f8cff';
@@ -135,13 +154,27 @@
     return track.blocks.reduce((sum, b) => sum + b.duration, 0);
   }
 
+  /** Tick-Intervall (Minuten), so dass Linien nicht zu dicht stehen (>= ~42px). */
+  function tickMinutes() {
+    const candidates = [5, 10, 15, 30, 60, 120, 180];
+    for (const c of candidates) {
+      if (c * state.pxPerMin >= 42) return c;
+    }
+    return 240;
+  }
+
   // =======================================================================
   //  RENDER
   // =======================================================================
   function render() {
     renderTemplates();
     renderTracks();
+    renderZoom();
     saveState();
+  }
+
+  function renderZoom() {
+    els.zoomLabel.textContent = state.pxPerMin.toFixed(1) + ' px/min';
   }
 
   function renderTemplates() {
@@ -191,18 +224,51 @@
     const board = els.trackBoard;
     board.innerHTML = '';
     const startMin = parseTime(state.startTime);
+    const px = state.pxPerMin;
+    const tick = tickMinutes();
+    const tickPx = tick * px;
 
+    // Höhe der Zeitachse = längster Track (mind. 1 Tick), damit alle Lanes ausgerichtet sind
+    const maxTotal = Math.max(0, ...state.tracks.map(trackTotal));
+    const axisMinutes = Math.max(maxTotal, tick);
+    const axisHeight = axisMinutes * px;
+
+    board.style.setProperty('--tick-px', tickPx + 'px');
+
+    // --- Ruler-Lane ---
+    const rulerLane = document.createElement('div');
+    rulerLane.className = 'lane ruler-lane';
+    const rulerHead = document.createElement('div');
+    rulerHead.className = 'lane-head';
+    rulerHead.innerHTML = '<div class="track-meta"><span>Zeit</span></div>';
+    const ruler = document.createElement('div');
+    ruler.className = 'ruler';
+    ruler.style.height = axisHeight + 'px';
+    for (let m = 0; m <= axisMinutes + 0.001; m += tick) {
+      const t = document.createElement('div');
+      t.className = 'ruler-tick';
+      t.style.top = (m * px) + 'px';
+      t.textContent = formatTime(startMin + m);
+      ruler.appendChild(t);
+    }
+    rulerLane.append(rulerHead, ruler);
+    board.appendChild(rulerLane);
+
+    // --- Track-Lanes ---
     for (const track of state.tracks) {
-      const trackEl = document.createElement('div');
-      trackEl.className = 'track';
-      trackEl.dataset.trackId = track.id;
+      const lane = document.createElement('div');
+      lane.className = 'lane';
+      lane.dataset.trackId = track.id;
 
       const total = trackTotal(track);
       const endMin = startMin + total;
 
       // Head
       const head = document.createElement('div');
-      head.className = 'track-head';
+      head.className = 'lane-head';
+
+      const nameRow = document.createElement('div');
+      nameRow.className = 'track-name-row';
       const nameInput = document.createElement('input');
       nameInput.className = 'track-name';
       nameInput.value = track.name;
@@ -215,58 +281,65 @@
       delTrackBtn.textContent = '🗑';
       delTrackBtn.title = 'Track löschen';
       delTrackBtn.addEventListener('click', () => deleteTrack(track.id));
-      head.append(nameInput, delTrackBtn);
+      nameRow.append(nameInput, delTrackBtn);
 
-      // Meta
       const meta = document.createElement('div');
       meta.className = 'track-meta';
-      meta.innerHTML = `<span>${state.startTime}–${formatTime(endMin)}</span><span>${track.blocks.length} Blöcke</span>`;
+      meta.innerHTML = `<span>${state.startTime}–${formatTime(endMin)}</span><span>${formatDuration(total)}</span>`;
 
-      // Blocks container
-      const blocksEl = document.createElement('div');
-      blocksEl.className = 'track-blocks';
-      blocksEl.dataset.trackId = track.id;
+      const addGapBtn = document.createElement('button');
+      addGapBtn.className = 'btn add-gap';
+      addGapBtn.textContent = '+ Lücke';
+      addGapBtn.title = 'Pause / Leerzeit einfügen (zum Synchronisieren)';
+      addGapBtn.addEventListener('click', () => addGap(track.id));
+
+      head.append(nameRow, meta, addGapBtn);
+
+      // Canvas
+      const canvas = document.createElement('div');
+      canvas.className = 'track-canvas';
+      canvas.dataset.trackId = track.id;
+      canvas.style.minHeight = axisHeight + 'px';
 
       let cursor = startMin;
       for (const block of track.blocks) {
-        const blockEl = buildBlockEl(track, block, cursor);
-        blocksEl.appendChild(blockEl);
+        canvas.appendChild(buildBlockEl(track, block, cursor, px));
         cursor += block.duration;
       }
       if (track.blocks.length === 0) {
         const hint = document.createElement('div');
-        hint.className = 'empty-hint';
+        hint.className = 'canvas-empty';
         hint.textContent = 'Templates hierher ziehen';
-        blocksEl.appendChild(hint);
+        canvas.appendChild(hint);
       }
 
-      setupTrackDnD(blocksEl, track);
-
-      // Foot
-      const foot = document.createElement('div');
-      foot.className = 'track-foot';
-      foot.innerHTML = `<span>Gesamt</span><span>${formatDuration(total)}</span>`;
-
-      trackEl.append(head, meta, blocksEl, foot);
-      board.appendChild(trackEl);
+      setupTrackDnD(canvas, track);
+      lane.append(head, canvas);
+      board.appendChild(lane);
     }
 
     // Add-track tile
     const addTile = document.createElement('button');
     addTile.className = 'add-track-tile';
-    addTile.textContent = '+ Track hinzufügen';
+    addTile.textContent = '+ Track';
     addTile.addEventListener('click', addTrack);
     board.appendChild(addTile);
   }
 
-  function buildBlockEl(track, block, startMin) {
+  function buildBlockEl(track, block, startMin, px) {
     const el = document.createElement('div');
-    el.className = 'block';
+    el.className = 'block' + (block.isGap ? ' is-gap' : '');
     el.draggable = true;
     el.style.setProperty('--block-color', block.color);
+    el.style.height = Math.max(1, block.duration * px) + 'px';
+    if (block.duration * px < 34) el.classList.add('is-tiny');
     el.dataset.blockId = block.id;
+    el.title = `${block.name} · ${formatTime(startMin)}–${formatTime(startMin + block.duration)} · ${formatDuration(block.duration)}\nDoppelklick zum Bearbeiten`;
     el.innerHTML = `
-      <button class="block-remove" title="Entfernen">×</button>
+      <div class="block-actions">
+        <button class="act-edit" title="Bearbeiten">✎</button>
+        <button class="act-del" title="Entfernen">×</button>
+      </div>
       <div class="block-time"></div>
       <div class="block-name"></div>
       <div class="block-dur"></div>`;
@@ -275,10 +348,17 @@
     el.querySelector('.block-name').textContent = block.name;
     el.querySelector('.block-dur').textContent = formatDuration(block.duration);
 
-    el.querySelector('.block-remove').addEventListener('click', (e) => {
+    const actions = el.querySelector('.block-actions');
+    actions.addEventListener('mousedown', (e) => e.stopPropagation());
+    el.querySelector('.act-del').addEventListener('click', (e) => {
       e.stopPropagation();
       removeBlock(track.id, block.id);
     });
+    el.querySelector('.act-edit').addEventListener('click', (e) => {
+      e.stopPropagation();
+      editBlock(track.id, block.id);
+    });
+    el.addEventListener('dblclick', () => editBlock(track.id, block.id));
 
     el.addEventListener('dragstart', (e) => {
       e.stopPropagation();
@@ -302,54 +382,50 @@
 
   function clearPlaceholders() {
     document.querySelectorAll('.block-drop-placeholder').forEach((p) => p.remove());
-    document.querySelectorAll('.track-blocks.drag-over').forEach((b) => b.classList.remove('drag-over'));
+    document.querySelectorAll('.track-canvas.drag-over').forEach((b) => b.classList.remove('drag-over'));
   }
 
-  function setupTrackDnD(blocksEl, track) {
-    blocksEl.addEventListener('dragover', (e) => {
+  function setupTrackDnD(canvas, track) {
+    canvas.addEventListener('dragover', (e) => {
       if (!dragData) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = dragData.kind === 'template' ? 'copy' : 'move';
-      blocksEl.classList.add('drag-over');
-      showPlaceholder(blocksEl, e.clientY);
+      canvas.classList.add('drag-over');
+      showPlaceholder(canvas, e.clientY);
     });
-    blocksEl.addEventListener('dragleave', (e) => {
-      if (!blocksEl.contains(e.relatedTarget)) {
-        blocksEl.classList.remove('drag-over');
+    canvas.addEventListener('dragleave', (e) => {
+      if (!canvas.contains(e.relatedTarget)) {
+        canvas.classList.remove('drag-over');
       }
     });
-    blocksEl.addEventListener('drop', (e) => {
+    canvas.addEventListener('drop', (e) => {
       if (!dragData) return;
       e.preventDefault();
-      const index = placeholderIndex(blocksEl);
+      const index = placeholderIndex(canvas);
       handleDrop(track, index);
       clearPlaceholders();
     });
   }
 
-  function showPlaceholder(blocksEl, clientY) {
+  function showPlaceholder(canvas, clientY) {
     clearPlaceholders();
-    blocksEl.classList.add('drag-over');
+    canvas.classList.add('drag-over');
     const ph = document.createElement('div');
     ph.className = 'block-drop-placeholder';
-    const blockEls = [...blocksEl.querySelectorAll('.block:not(.dragging)')];
+    const blockEls = [...canvas.querySelectorAll('.block:not(.dragging)')];
     const after = blockEls.find((el) => {
       const r = el.getBoundingClientRect();
       return clientY < r.top + r.height / 2;
     });
-    if (after) blocksEl.insertBefore(ph, after);
-    else {
-      const hint = blocksEl.querySelector('.empty-hint');
-      if (hint) blocksEl.insertBefore(ph, hint);
-      else blocksEl.appendChild(ph);
-    }
+    if (after) canvas.insertBefore(ph, after);
+    else canvas.appendChild(ph);
   }
 
-  function placeholderIndex(blocksEl) {
-    const ph = blocksEl.querySelector('.block-drop-placeholder');
-    if (!ph) return findTrack(blocksEl.dataset.trackId).blocks.length;
+  function placeholderIndex(canvas) {
+    const ph = canvas.querySelector('.block-drop-placeholder');
+    if (!ph) return findTrack(canvas.dataset.trackId).blocks.length;
     let idx = 0;
-    for (const child of blocksEl.children) {
+    for (const child of canvas.children) {
       if (child === ph) break;
       if (child.classList.contains('block') && !child.classList.contains('dragging')) idx++;
     }
@@ -366,6 +442,7 @@
         name: tpl.name,
         duration: tpl.duration,
         color: tpl.color,
+        isGap: false,
       };
       targetTrack.blocks.splice(index, 0, block);
     } else if (dragData.kind === 'block') {
@@ -375,11 +452,100 @@
       if (srcIdx === -1) return;
       const [moved] = srcTrack.blocks.splice(srcIdx, 1);
       let insertAt = index;
-      // Korrektur, wenn innerhalb desselben Tracks nach vorne verschoben
+      // Korrektur, wenn innerhalb desselben Tracks nach hinten verschoben
       if (srcTrack === targetTrack && srcIdx < index) insertAt = index - 1;
       targetTrack.blocks.splice(insertAt, 0, moved);
     }
     render();
+  }
+
+  // =======================================================================
+  //  MODAL (reusable edit dialog)
+  // =======================================================================
+  let modalSubmit = null;
+  function openModal(title, fields, onSave) {
+    els.modalTitle.textContent = title;
+    els.modalFields.innerHTML = '';
+    const inputs = {};
+    for (const f of fields) {
+      const wrap = document.createElement('div');
+      wrap.className = 'modal-field';
+      const label = document.createElement('label');
+      label.textContent = f.label;
+      const input = document.createElement('input');
+      input.type = f.type || 'text';
+      input.value = f.value ?? '';
+      if (f.type === 'number') { input.min = '1'; input.step = '1'; }
+      const id = 'mf-' + f.key;
+      input.id = id;
+      label.htmlFor = id;
+      wrap.append(label, input);
+      els.modalFields.appendChild(wrap);
+      inputs[f.key] = input;
+    }
+    modalSubmit = () => {
+      const values = {};
+      for (const k of Object.keys(inputs)) values[k] = inputs[k].value;
+      onSave(values);
+    };
+    els.modal.hidden = false;
+    const first = els.modalFields.querySelector('input');
+    if (first) { first.focus(); first.select(); }
+  }
+
+  function closeModal() {
+    els.modal.hidden = true;
+    modalSubmit = null;
+  }
+
+  els.modalForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (modalSubmit) modalSubmit();
+    closeModal();
+  });
+  els.modalCancel.addEventListener('click', closeModal);
+  els.modal.addEventListener('click', (e) => { if (e.target === els.modal) closeModal(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !els.modal.hidden) closeModal();
+  });
+
+  // =======================================================================
+  //  BLOCK / GAP EDIT
+  // =======================================================================
+  function editBlock(trackId, blockId) {
+    const tr = findTrack(trackId);
+    const block = tr && tr.blocks.find((b) => b.id === blockId);
+    if (!block) return;
+    const fields = [
+      { key: 'name', label: 'Name', type: 'text', value: block.name },
+      { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: block.duration },
+    ];
+    if (!block.isGap) fields.push({ key: 'color', label: 'Farbe', type: 'color', value: block.color });
+    openModal(block.isGap ? 'Lücke bearbeiten' : 'Block bearbeiten', fields, (v) => {
+      block.name = v.name.trim() || block.name;
+      block.duration = clampDuration(v.duration);
+      if (v.color) block.color = validColor(v.color);
+      render();
+    });
+  }
+
+  function addGap(trackId) {
+    const tr = findTrack(trackId);
+    if (!tr) return;
+    openModal('Lücke / Pause einfügen', [
+      { key: 'name', label: 'Bezeichnung', type: 'text', value: 'Pause' },
+      { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: 15 },
+    ], (v) => {
+      tr.blocks.push({
+        id: uid(),
+        templateId: null,
+        name: v.name.trim() || 'Pause',
+        duration: clampDuration(v.duration),
+        color: '#8b97a6',
+        isGap: true,
+      });
+      render();
+    });
   }
 
   // =======================================================================
@@ -400,14 +566,17 @@
   function editTemplate(id) {
     const tpl = state.templates.find((t) => t.id === id);
     if (!tpl) return;
-    const name = prompt('Template-Name:', tpl.name);
-    if (name === null) return;
-    const durStr = prompt('Dauer in Minuten:', String(tpl.duration));
-    if (durStr === null) return;
-    tpl.name = name.trim() || tpl.name;
-    tpl.duration = clampDuration(durStr);
-    render();
-    toast('Template aktualisiert. Bereits platzierte Blöcke bleiben unverändert.');
+    openModal('Template bearbeiten', [
+      { key: 'name', label: 'Name', type: 'text', value: tpl.name },
+      { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: tpl.duration },
+      { key: 'color', label: 'Farbe', type: 'color', value: tpl.color },
+    ], (v) => {
+      tpl.name = v.name.trim() || tpl.name;
+      tpl.duration = clampDuration(v.duration);
+      tpl.color = validColor(v.color);
+      render();
+      toast('Template aktualisiert. Bereits platzierte Blöcke bleiben unverändert.');
+    });
   }
 
   function deleteTemplate(id) {
@@ -446,12 +615,22 @@
   }
 
   // =======================================================================
-  //  START TIME
+  //  START TIME / ZOOM
   // =======================================================================
   els.startTime.addEventListener('change', () => {
     state.startTime = els.startTime.value || '09:00';
     render();
   });
+
+  function setZoom(dir) {
+    const i = PX_STEPS.findIndex((v) => Math.abs(v - state.pxPerMin) < 0.001);
+    let idx = i === -1 ? PX_STEPS.indexOf(DEFAULT_PX) : i;
+    idx = Math.min(PX_STEPS.length - 1, Math.max(0, idx + dir));
+    state.pxPerMin = PX_STEPS[idx];
+    render();
+  }
+  els.zoomIn.addEventListener('click', () => setZoom(1));
+  els.zoomOut.addEventListener('click', () => setZoom(-1));
 
   // =======================================================================
   //  EXPORT / IMPORT

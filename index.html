@@ -50,11 +50,30 @@
     <section class="board panel">
       <div class="panel-head">
         <h2>Tracks</h2>
-        <button id="addTrackBtn" class="btn btn-primary">+ Track</button>
+        <div class="board-tools">
+          <div class="zoom" title="Zeitachse zoomen">
+            <button id="zoomOut" class="btn btn-icon" type="button">−</button>
+            <span id="zoomLabel" class="zoom-label"></span>
+            <button id="zoomIn" class="btn btn-icon" type="button">+</button>
+          </div>
+          <button id="addTrackBtn" class="btn btn-primary">+ Track</button>
+        </div>
       </div>
       <div id="trackBoard" class="track-board"></div>
     </section>
   </main>
+
+  <!-- Edit-Dialog (Blöcke, Lücken, Templates) -->
+  <div id="modal" class="modal-overlay" hidden>
+    <form id="modalForm" class="modal">
+      <h3 id="modalTitle"></h3>
+      <div id="modalFields" class="modal-fields"></div>
+      <div class="modal-actions">
+        <button type="button" id="modalCancel" class="btn btn-ghost">Abbrechen</button>
+        <button type="submit" id="modalSave" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </div>
 
   <div id="toast" class="toast" hidden></div>
 
