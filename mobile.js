@@ -113,6 +113,7 @@
     const li = document.createElement('li');
     li.className = 'm-add-parallel';
     li.dataset.seg = String(row.index);
+    li.dataset.segHead = String(row.index); // zählt als Abschnittsgrenze beim Ziehen
     li.textContent = '+ Parallel-Programm · ab ' + formatTime(row.start);
     li.addEventListener('click', () => { activeSeg = row.index; userPickedSeg = true; render(); });
     return li;
@@ -257,16 +258,16 @@
       if (e.button != null && e.button > 0) return;
       drag = {
         li, seg: li.dataset.seg, track: li.dataset.track, blockId: li.dataset.blockId,
-        pointerId: e.pointerId, handle, lastY: e.clientY, timer: null,
+        pointerId: e.pointerId, lastY: e.clientY, timer: null,
       };
       li.classList.add('m-dragging');
-      try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      // WICHTIG: Capture auf die (unbewegliche) Liste legen, nicht auf den
+      // Anfasser – der wird beim Sortieren im DOM verschoben, was sonst die
+      // pointermove-Events abreißen lässt.
+      try { els.blockList.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
       drag.timer = setInterval(autoScrollTick, 16);
       e.preventDefault();
     });
-    handle.addEventListener('pointermove', dragMove);
-    handle.addEventListener('pointerup', dragEnd);
-    handle.addEventListener('pointercancel', dragEnd);
   }
 
   /** Schiebt das gezogene Element vor die erste Zeile, deren Mitte unter dem
@@ -329,9 +330,11 @@
     for (const el of els.blockList.children) {
       if (el.dataset.segHead != null) {
         cur = Number(el.dataset.segHead); bc = segStart[cur];
-        const span = el.querySelector('span'); if (span) span.textContent = prefix + formatTime(segStart[cur]);
-      } else if (el.classList.contains('m-add-parallel')) {
-        el.textContent = '+ Parallel-Programm · ab ' + formatTime(segStart[Number(el.dataset.seg)]);
+        if (el.classList.contains('m-add-parallel')) {
+          el.textContent = '+ Parallel-Programm · ab ' + formatTime(segStart[cur]);
+        } else {
+          const span = el.querySelector('span'); if (span) span.textContent = prefix + formatTime(segStart[cur]);
+        }
       } else if (el.classList.contains('m-plenum')) {
         const i = Number(el.dataset.plen), dur = Number(el.dataset.dur) || 0;
         const t = el.querySelector('.m-block-time');
@@ -364,7 +367,7 @@
     drag = null;
     clearInterval(d.timer);
     d.li.classList.remove('m-dragging');
-    try { d.handle.releasePointerCapture(d.pointerId); } catch (_) { /* ignore */ }
+    try { els.blockList.releasePointerCapture(d.pointerId); } catch (_) { /* ignore */ }
 
     // Ziel-Abschnitt = letzter vorausgehender Abschnitts-Header; Index = Anzahl
     // dortiger Blöcke vor dem gezogenen Element.
@@ -550,6 +553,12 @@
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+
+  // Drag-Events einmalig an der (stabilen) Liste – überleben jedes Re-Render,
+  // da nur die Kinder von blockList ausgetauscht werden.
+  els.blockList.addEventListener('pointermove', dragMove);
+  els.blockList.addEventListener('pointerup', dragEnd);
+  els.blockList.addEventListener('pointercancel', dragEnd);
 
   subscribe(render);
   render();
