@@ -1,16 +1,17 @@
 /* Track-Tetris – Desktop-Oberfläche.
- * Nutzt window.TT (core.js) für State/Logik; hier nur Darstellung, Drag & Drop,
- * Modal-Dialog und Datei-Im-/Export.
+ * Nutzt window.TT (core.js). Hier nur Darstellung, Drag & Drop, Modal, Datei-I/O.
  */
 (() => {
   'use strict';
 
   const {
-    getState, subscribe, parseTime, formatTime, formatDuration, tickMinutes,
-    clampDuration, validColor, findTrack, trackTotal,
+    getState, subscribe, formatTime, formatDuration, tickMinutes,
+    findTrack, computeSchedule, blocksDur, trackSegment, trackTotalDuration,
   } = TT;
 
-  // ---- DOM refs ----------------------------------------------------------
+  const MIN_SEG_EMPTY = 48; // px Höhe für leere Abschnitte (Drop-Ziel)
+  const MIN_PLEN = 30;      // px Mindesthöhe Plenum-Band
+
   const els = {
     startTime: document.getElementById('startTime'),
     templateForm: document.getElementById('templateForm'),
@@ -20,6 +21,7 @@
     templateList: document.getElementById('templateList'),
     trackBoard: document.getElementById('trackBoard'),
     addTrackBtn: document.getElementById('addTrackBtn'),
+    addPlenumBtn: document.getElementById('addPlenumBtn'),
     exportBtn: document.getElementById('exportBtn'),
     importBtn: document.getElementById('importBtn'),
     importFile: document.getElementById('importFile'),
@@ -70,19 +72,13 @@
         </div>`;
       li.querySelector('.tpl-name').textContent = tpl.name;
       li.querySelector('.tpl-dur').textContent = formatDuration(tpl.duration);
-
       li.addEventListener('dragstart', (e) => {
         dragData = { kind: 'template', templateId: tpl.id };
         li.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'copy';
         e.dataTransfer.setData('text/plain', tpl.id);
       });
-      li.addEventListener('dragend', () => {
-        li.classList.remove('dragging');
-        dragData = null;
-        clearPlaceholders();
-      });
-
+      li.addEventListener('dragend', () => { li.classList.remove('dragging'); dragData = null; clearPlaceholders(); });
       li.querySelector('[data-act="edit"]').addEventListener('click', () => editTemplate(tpl.id));
       li.querySelector('[data-act="del"]').addEventListener('click', () => deleteTemplate(tpl.id));
       list.appendChild(li);
@@ -92,33 +88,47 @@
   function renderTracks(state) {
     const board = els.trackBoard;
     board.innerHTML = '';
-    const startMin = parseTime(state.startTime);
     const px = state.pxPerMin;
     const tick = tickMinutes(px);
-    const tickPx = tick * px;
+    const { rows } = computeSchedule();
 
-    const maxTotal = Math.max(0, ...state.tracks.map(trackTotal));
-    const axisMinutes = Math.max(maxTotal, tick);
-    const axisHeight = axisMinutes * px;
-    board.style.setProperty('--tick-px', tickPx + 'px');
+    // Pixelhöhe je Zeile (Abschnitt bzw. Plenum) – identisch für Lineal und Tracks
+    const rowPx = rows.map((r) => r.kind === 'plen'
+      ? Math.max(r.dur * px, MIN_PLEN)
+      : (r.dur > 0 ? r.dur * px : MIN_SEG_EMPTY));
 
-    // --- Ruler-Lane ---
+    board.style.setProperty('--tick-px', (tick * px) + 'px');
+
+    // --- Lineal-Lane ---
     const rulerLane = document.createElement('div');
     rulerLane.className = 'lane ruler-lane';
     const rulerHead = document.createElement('div');
     rulerHead.className = 'lane-head';
     rulerHead.innerHTML = '<div class="track-meta"><span>Zeit</span></div>';
-    const ruler = document.createElement('div');
-    ruler.className = 'ruler';
-    ruler.style.height = axisHeight + 'px';
-    for (let m = 0; m <= axisMinutes + 0.001; m += tick) {
-      const t = document.createElement('div');
-      t.className = 'ruler-tick';
-      t.style.top = (m * px) + 'px';
-      t.textContent = formatTime(startMin + m);
-      ruler.appendChild(t);
-    }
-    rulerLane.append(rulerHead, ruler);
+    const rulerBody = document.createElement('div');
+    rulerBody.className = 'ruler-body';
+    rows.forEach((r, idx) => {
+      const cell = document.createElement('div');
+      cell.className = 'ruler-cell ' + (r.kind === 'plen' ? 'is-plen' : 'is-seg');
+      cell.style.height = rowPx[idx] + 'px';
+      cell.innerHTML = `<span class="ruler-time">${formatTime(r.start)}</span>`;
+      // Plenum hier einfügen (nach Abschnitt r.index)
+      if (r.kind === 'seg') {
+        const ins = document.createElement('button');
+        ins.className = 'ruler-insert';
+        ins.title = 'Plenum nach diesem Abschnitt einfügen';
+        ins.textContent = '+ Plenum';
+        ins.addEventListener('click', () => addPlenum(r.index));
+        cell.appendChild(ins);
+      }
+      rulerBody.appendChild(cell);
+    });
+    // Endzeit-Label
+    const endCell = document.createElement('div');
+    endCell.className = 'ruler-cell is-end';
+    endCell.innerHTML = `<span class="ruler-time">${formatTime(computeSchedule().totalEnd)}</span>`;
+    rulerBody.appendChild(endCell);
+    rulerLane.append(rulerHead, rulerBody);
     board.appendChild(rulerLane);
 
     // --- Track-Lanes ---
@@ -127,12 +137,8 @@
       lane.className = 'lane';
       lane.dataset.trackId = track.id;
 
-      const total = trackTotal(track);
-      const endMin = startMin + total;
-
       const head = document.createElement('div');
       head.className = 'lane-head';
-
       const nameRow = document.createElement('div');
       nameRow.className = 'track-name-row';
       const nameInput = document.createElement('input');
@@ -148,35 +154,21 @@
 
       const meta = document.createElement('div');
       meta.className = 'track-meta';
-      meta.innerHTML = `<span>${state.startTime}–${formatTime(endMin)}</span><span>${formatDuration(total)}</span>`;
+      const total = trackTotalDuration(track);
+      meta.innerHTML = `<span>Σ ${formatDuration(total)}</span>`;
+      head.append(nameRow, meta);
 
-      const addGapBtn = document.createElement('button');
-      addGapBtn.className = 'btn add-gap';
-      addGapBtn.textContent = '+ Lücke';
-      addGapBtn.title = 'Pause / Leerzeit einfügen (zum Synchronisieren)';
-      addGapBtn.addEventListener('click', () => addGap(track.id));
+      const body = document.createElement('div');
+      body.className = 'lane-body';
+      rows.forEach((r, idx) => {
+        if (r.kind === 'plen') {
+          body.appendChild(buildPlenumBar(r.block, r.start, rowPx[idx]));
+        } else {
+          body.appendChild(buildSegZone(track, r.index, r.start, r.dur, px, rowPx[idx]));
+        }
+      });
 
-      head.append(nameRow, meta, addGapBtn);
-
-      const canvas = document.createElement('div');
-      canvas.className = 'track-canvas';
-      canvas.dataset.trackId = track.id;
-      canvas.style.minHeight = axisHeight + 'px';
-
-      let cursor = startMin;
-      for (const block of track.blocks) {
-        canvas.appendChild(buildBlockEl(track, block, cursor, px));
-        cursor += block.duration;
-      }
-      if (track.blocks.length === 0) {
-        const hint = document.createElement('div');
-        hint.className = 'canvas-empty';
-        hint.textContent = 'Templates hierher ziehen';
-        canvas.appendChild(hint);
-      }
-
-      setupTrackDnD(canvas, track);
-      lane.append(head, canvas);
+      lane.append(head, body);
       board.appendChild(lane);
     }
 
@@ -187,7 +179,62 @@
     board.appendChild(addTile);
   }
 
-  function buildBlockEl(track, block, startMin, px) {
+  function buildPlenumBar(block, startMin, heightPx) {
+    const el = document.createElement('div');
+    el.className = 'plenum-bar';
+    el.style.setProperty('--block-color', block.color);
+    el.style.height = heightPx + 'px';
+    el.title = `Plenum: ${block.name} · ${formatTime(startMin)}–${formatTime(startMin + block.duration)} (alle Tracks)`;
+    el.innerHTML = `
+      <div class="plenum-actions">
+        <button class="act-edit" title="Bearbeiten">✎</button>
+        <button class="act-del" title="Plenum entfernen">×</button>
+      </div>
+      <span class="plenum-name"></span>
+      <span class="plenum-time"></span>`;
+    el.querySelector('.plenum-name').textContent = '🔒 ' + block.name;
+    el.querySelector('.plenum-time').textContent =
+      formatTime(startMin) + '–' + formatTime(startMin + block.duration);
+    el.querySelector('.act-edit').addEventListener('click', () => editPlenum(block.id));
+    el.querySelector('.act-del').addEventListener('click', () => TT.removeBlocking(block.id));
+    return el;
+  }
+
+  function buildSegZone(track, segIndex, segStart, segDur, px, heightPx) {
+    const zone = document.createElement('div');
+    zone.className = 'seg-zone';
+    zone.style.height = heightPx + 'px';
+    zone.dataset.trackId = track.id;
+    zone.dataset.segIndex = String(segIndex);
+
+    const blocks = trackSegment(track, segIndex);
+    let cursor = segStart;
+    for (const block of blocks) {
+      zone.appendChild(buildBlockEl(track, segIndex, block, cursor, px));
+      cursor += block.duration;
+    }
+
+    const used = blocksDur(blocks);
+    if (blocks.length === 0) {
+      const hint = document.createElement('div');
+      hint.className = 'seg-empty';
+      hint.textContent = '⊕';
+      hint.title = 'Templates hierher ziehen';
+      zone.appendChild(hint);
+    } else if (segDur - used > 0) {
+      // „Wartezeit" bis zum nächsten Plenum (kürzerer Track)
+      const wait = document.createElement('div');
+      wait.className = 'seg-wait';
+      wait.style.height = (segDur - used) * px + 'px';
+      wait.title = `wartet ${formatDuration(segDur - used)} bis zum nächsten Plenum`;
+      zone.appendChild(wait);
+    }
+
+    setupSegDnD(zone, track, segIndex);
+    return zone;
+  }
+
+  function buildBlockEl(track, segIndex, block, startMin, px) {
     const el = document.createElement('div');
     el.className = 'block' + (block.isGap ? ' is-gap' : '');
     el.draggable = true;
@@ -211,28 +258,18 @@
 
     const actions = el.querySelector('.block-actions');
     actions.addEventListener('mousedown', (e) => e.stopPropagation());
-    el.querySelector('.act-del').addEventListener('click', (e) => {
-      e.stopPropagation();
-      TT.removeBlock(track.id, block.id);
-    });
-    el.querySelector('.act-edit').addEventListener('click', (e) => {
-      e.stopPropagation();
-      editBlock(track.id, block.id);
-    });
-    el.addEventListener('dblclick', () => editBlock(track.id, block.id));
+    el.querySelector('.act-del').addEventListener('click', (e) => { e.stopPropagation(); TT.removeBlock(track.id, segIndex, block.id); });
+    el.querySelector('.act-edit').addEventListener('click', (e) => { e.stopPropagation(); editBlock(track.id, segIndex, block.id); });
+    el.addEventListener('dblclick', () => editBlock(track.id, segIndex, block.id));
 
     el.addEventListener('dragstart', (e) => {
       e.stopPropagation();
-      dragData = { kind: 'block', trackId: track.id, blockId: block.id };
+      dragData = { kind: 'block', trackId: track.id, segIndex, blockId: block.id };
       el.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', block.id);
     });
-    el.addEventListener('dragend', () => {
-      el.classList.remove('dragging');
-      dragData = null;
-      clearPlaceholders();
-    });
+    el.addEventListener('dragend', () => { el.classList.remove('dragging'); dragData = null; clearPlaceholders(); });
     return el;
   }
 
@@ -243,60 +280,60 @@
 
   function clearPlaceholders() {
     document.querySelectorAll('.block-drop-placeholder').forEach((p) => p.remove());
-    document.querySelectorAll('.track-canvas.drag-over').forEach((b) => b.classList.remove('drag-over'));
+    document.querySelectorAll('.seg-zone.drag-over').forEach((b) => b.classList.remove('drag-over'));
   }
 
-  function setupTrackDnD(canvas, track) {
-    canvas.addEventListener('dragover', (e) => {
+  function setupSegDnD(zone, track, segIndex) {
+    zone.addEventListener('dragover', (e) => {
       if (!dragData) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = dragData.kind === 'template' ? 'copy' : 'move';
-      canvas.classList.add('drag-over');
-      showPlaceholder(canvas, e.clientY);
+      zone.classList.add('drag-over');
+      showPlaceholder(zone, e.clientY);
     });
-    canvas.addEventListener('dragleave', (e) => {
-      if (!canvas.contains(e.relatedTarget)) canvas.classList.remove('drag-over');
+    zone.addEventListener('dragleave', (e) => {
+      if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
     });
-    canvas.addEventListener('drop', (e) => {
+    zone.addEventListener('drop', (e) => {
       if (!dragData) return;
       e.preventDefault();
-      const index = placeholderIndex(canvas);
-      handleDrop(track, index);
+      const index = placeholderIndex(zone);
+      if (dragData.kind === 'template') {
+        TT.addBlockFromTemplate(dragData.templateId, track.id, segIndex, index);
+      } else if (dragData.kind === 'block') {
+        TT.moveBlock(dragData.trackId, dragData.segIndex, dragData.blockId, track.id, segIndex, index);
+      }
       clearPlaceholders();
     });
   }
 
-  function showPlaceholder(canvas, clientY) {
+  function showPlaceholder(zone, clientY) {
     clearPlaceholders();
-    canvas.classList.add('drag-over');
+    zone.classList.add('drag-over');
     const ph = document.createElement('div');
     ph.className = 'block-drop-placeholder';
-    const blockEls = [...canvas.querySelectorAll('.block:not(.dragging)')];
+    const blockEls = [...zone.querySelectorAll('.block:not(.dragging)')];
     const after = blockEls.find((el) => {
       const r = el.getBoundingClientRect();
       return clientY < r.top + r.height / 2;
     });
-    if (after) canvas.insertBefore(ph, after);
-    else canvas.appendChild(ph);
+    if (after) zone.insertBefore(ph, after);
+    else {
+      const filler = zone.querySelector('.seg-empty, .seg-wait');
+      if (filler) zone.insertBefore(ph, filler);
+      else zone.appendChild(ph);
+    }
   }
 
-  function placeholderIndex(canvas) {
-    const ph = canvas.querySelector('.block-drop-placeholder');
-    if (!ph) return findTrack(canvas.dataset.trackId).blocks.length;
+  function placeholderIndex(zone) {
+    const ph = zone.querySelector('.block-drop-placeholder');
+    if (!ph) return trackSegment(findTrack(zone.dataset.trackId), Number(zone.dataset.segIndex)).length;
     let idx = 0;
-    for (const child of canvas.children) {
+    for (const child of zone.children) {
       if (child === ph) break;
       if (child.classList.contains('block') && !child.classList.contains('dragging')) idx++;
     }
     return idx;
-  }
-
-  function handleDrop(targetTrack, index) {
-    if (dragData.kind === 'template') {
-      TT.addBlockFromTemplate(dragData.templateId, targetTrack.id, index);
-    } else if (dragData.kind === 'block') {
-      TT.moveBlock(dragData.trackId, dragData.blockId, targetTrack.id, index);
-    }
   }
 
   // =======================================================================
@@ -317,56 +354,57 @@
       input.value = f.value ?? '';
       if (f.type === 'number') { input.min = '1'; input.step = '1'; }
       const id = 'mf-' + f.key;
-      input.id = id;
-      label.htmlFor = id;
+      input.id = id; label.htmlFor = id;
       wrap.append(label, input);
       els.modalFields.appendChild(wrap);
       inputs[f.key] = input;
     }
     modalSubmit = () => {
-      const values = {};
-      for (const k of Object.keys(inputs)) values[k] = inputs[k].value;
-      onSave(values);
+      const v = {};
+      for (const k of Object.keys(inputs)) v[k] = inputs[k].value;
+      onSave(v);
     };
     els.modal.hidden = false;
     const first = els.modalFields.querySelector('input');
     if (first) { first.focus(); first.select(); }
   }
   function closeModal() { els.modal.hidden = true; modalSubmit = null; }
-
-  els.modalForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (modalSubmit) modalSubmit();
-    closeModal();
-  });
+  els.modalForm.addEventListener('submit', (e) => { e.preventDefault(); if (modalSubmit) modalSubmit(); closeModal(); });
   els.modalCancel.addEventListener('click', closeModal);
   els.modal.addEventListener('click', (e) => { if (e.target === els.modal) closeModal(); });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !els.modal.hidden) closeModal();
-  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !els.modal.hidden) closeModal(); });
 
   // =======================================================================
   //  EDIT ACTIONS
   // =======================================================================
-  function editBlock(trackId, blockId) {
+  function editBlock(trackId, segIndex, blockId) {
     const tr = findTrack(trackId);
-    const block = tr && tr.blocks.find((b) => b.id === blockId);
+    const block = tr && (tr.segments[segIndex] || []).find((b) => b.id === blockId);
     if (!block) return;
     const fields = [
       { key: 'name', label: 'Name', type: 'text', value: block.name },
       { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: block.duration },
     ];
     if (!block.isGap) fields.push({ key: 'color', label: 'Farbe', type: 'color', value: block.color });
-    openModal(block.isGap ? 'Lücke bearbeiten' : 'Block bearbeiten', fields, (v) => {
-      TT.updateBlock(trackId, blockId, v);
-    });
+    openModal(block.isGap ? 'Lücke bearbeiten' : 'Block bearbeiten', fields, (v) => TT.updateBlock(trackId, segIndex, blockId, v));
   }
 
-  function addGap(trackId) {
-    openModal('Lücke / Pause einfügen', [
-      { key: 'name', label: 'Bezeichnung', type: 'text', value: 'Pause' },
-      { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: 15 },
-    ], (v) => TT.addGap(trackId, v));
+  function addPlenum(atIndex) {
+    openModal('Plenum-Block (alle Tracks)', [
+      { key: 'name', label: 'Bezeichnung', type: 'text', value: 'Keynote' },
+      { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: 45 },
+      { key: 'color', label: 'Farbe', type: 'color', value: '#5566d6' },
+    ], (v) => TT.addBlocking(v, atIndex));
+  }
+
+  function editPlenum(id) {
+    const p = getState().spine.find((x) => x.id === id);
+    if (!p) return;
+    openModal('Plenum bearbeiten', [
+      { key: 'name', label: 'Bezeichnung', type: 'text', value: p.name },
+      { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: p.duration },
+      { key: 'color', label: 'Farbe', type: 'color', value: p.color },
+    ], (v) => TT.updateBlocking(id, v));
   }
 
   function editTemplate(id) {
@@ -376,10 +414,7 @@
       { key: 'name', label: 'Name', type: 'text', value: tpl.name },
       { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: tpl.duration },
       { key: 'color', label: 'Farbe', type: 'color', value: tpl.color },
-    ], (v) => {
-      TT.updateTemplate(id, v);
-      toast('Template aktualisiert. Bereits platzierte Blöcke bleiben unverändert.');
-    });
+    ], (v) => { TT.updateTemplate(id, v); toast('Template aktualisiert. Bereits platzierte Blöcke bleiben unverändert.'); });
   }
 
   function deleteTemplate(id) {
@@ -392,31 +427,25 @@
   function deleteTrack(id) {
     const tr = findTrack(id);
     if (!tr) return;
-    if (tr.blocks.length > 0 && !confirm(`Track „${tr.name}" mit ${tr.blocks.length} Blöcken löschen?`)) return;
+    const count = tr.segments.reduce((s, seg) => s + seg.length, 0);
+    if (count > 0 && !confirm(`Track „${tr.name}" mit ${count} Blöcken löschen?`)) return;
     if (!TT.deleteTrack(id)) toast('Mindestens ein Track muss bestehen bleiben.');
   }
 
   // =======================================================================
-  //  FORMS / CONTROLS
+  //  CONTROLS
   // =======================================================================
   els.templateForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const created = TT.addTemplate({
-      name: els.tplName.value,
-      duration: els.tplDuration.value,
-      color: els.tplColor.value,
-    });
-    if (created) {
-      els.tplName.value = '';
-      els.tplDuration.value = '30';
-      els.tplName.focus();
-    }
+    const created = TT.addTemplate({ name: els.tplName.value, duration: els.tplDuration.value, color: els.tplColor.value });
+    if (created) { els.tplName.value = ''; els.tplDuration.value = '30'; els.tplName.focus(); }
   });
 
   els.startTime.addEventListener('change', () => TT.setStartTime(els.startTime.value));
   els.zoomIn.addEventListener('click', () => TT.stepZoom(1));
   els.zoomOut.addEventListener('click', () => TT.stepZoom(-1));
   els.addTrackBtn.addEventListener('click', () => TT.addTrack());
+  els.addPlenumBtn.addEventListener('click', () => addPlenum(null));
 
   // =======================================================================
   //  EXPORT / IMPORT
@@ -431,7 +460,6 @@
     URL.revokeObjectURL(url);
     toast('Als JSON exportiert.');
   });
-
   els.importBtn.addEventListener('click', () => els.importFile.click());
   els.importFile.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -444,7 +472,6 @@
     reader.readAsText(file);
     els.importFile.value = '';
   });
-
   els.resetBtn.addEventListener('click', () => {
     if (!confirm('Wirklich alles zurücksetzen? Nicht exportierte Änderungen gehen verloren.')) return;
     TT.reset();
@@ -461,7 +488,6 @@
     toastTimer = setTimeout(() => { els.toast.hidden = true; }, 3000);
   }
 
-  // ---- Init --------------------------------------------------------------
   subscribe(render);
   render();
 })();

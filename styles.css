@@ -271,44 +271,121 @@ input[type="color"] { padding: 2px; width: 38px; height: 34px; cursor: pointer; 
 }
 
 /* Ruler lane */
-.ruler-lane { flex: 0 0 60px; }
+.ruler-lane { flex: 0 0 76px; }
 .ruler-lane .lane-head { background: var(--panel); }
-.ruler {
+.ruler-body { position: relative; flex: 1; }
+.ruler-cell {
   position: relative;
-  flex: 1;
-}
-.ruler-tick {
-  position: absolute;
-  left: 0;
-  right: 0;
+  box-sizing: border-box;
   border-top: 1px solid var(--border);
+}
+.ruler-cell.is-plen { border-top-color: var(--primary); }
+.ruler-cell.is-end { height: 0; }
+.ruler-time {
+  position: absolute;
+  top: -1px;
+  left: 0.4rem;
   font-size: 0.68rem;
   color: var(--muted);
-  padding-left: 0.4rem;
   font-variant-numeric: tabular-nums;
-  transform: translateY(-1px);
+  transform: translateY(-50%);
+  background: var(--panel);
+  padding-right: 3px;
 }
+.ruler-insert {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  right: 2px;
+  font-size: 0.6rem;
+  padding: 1px 0;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.ruler-cell:hover .ruler-insert { opacity: 1; }
+.ruler-insert:hover { border-color: var(--primary); color: var(--primary); }
 
-/* Track canvas — proportional time area */
-.track-canvas {
+/* Track body — Abschnitte (seg-zone) + Plenum-Bänder */
+.lane-body { position: relative; flex: 1; display: flex; flex-direction: column; }
+
+.seg-zone {
   position: relative;
-  flex: 1;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  background:
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent calc(var(--tick-px) - 1px),
-      rgba(255, 255, 255, 0.045) calc(var(--tick-px) - 1px),
-      rgba(255, 255, 255, 0.045) var(--tick-px)
-    );
+  border-top: 1px solid var(--border);
 }
-.track-canvas.drag-over { background-color: rgba(79, 140, 255, 0.10); }
+.seg-zone.drag-over { background-color: rgba(79, 140, 255, 0.10); }
+.seg-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  opacity: 0.4;
+  font-size: 1.2rem;
+  pointer-events: none;
+}
+.seg-wait {
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(139, 151, 166, 0.07) 0, rgba(139, 151, 166, 0.07) 6px,
+      transparent 6px, transparent 12px);
+  pointer-events: none;
+}
+
+/* Plenum-Band (volle Breite, über alle Tracks gleich) */
+.plenum-bar {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.1rem 0.5rem;
+  background: color-mix(in srgb, var(--block-color, var(--primary)) 22%, var(--panel));
+  border-top: 2px solid var(--block-color, var(--primary));
+  border-bottom: 2px solid var(--block-color, var(--primary));
+  overflow: hidden;
+}
+.plenum-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plenum-time { font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.plenum-actions {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.plenum-bar:hover .plenum-actions { opacity: 1; }
+.plenum-actions button {
+  border: none;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.78rem;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 5px;
+}
+.plenum-actions .act-del:hover { background: var(--danger); color: #fff; }
+.plenum-actions .act-edit:hover { background: var(--primary); color: #fff; }
 
 .block {
   position: relative;
   box-sizing: border-box;
+  flex: 0 0 auto;
   border-bottom: 1px solid var(--border);
   border-left: 5px solid var(--block-color, var(--primary));
   background: var(--block-bg, var(--panel));
@@ -371,19 +448,6 @@ input[type="color"] { padding: 2px; width: 38px; height: 34px; cursor: pointer; 
   height: 0;
   border-top: 3px solid var(--primary);
   box-shadow: 0 0 6px var(--primary);
-}
-
-.canvas-empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 1rem;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-style: italic;
-  pointer-events: none;
 }
 
 .add-track-tile {

@@ -5,6 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Track-Tetris – Konferenz-Zeitplaner</title>
   <link rel="stylesheet" href="styles.css?v=__BUILD__" />
+  <script>
+    // Mobilgeräte direkt auf die Mobil-Version leiten (außer der Nutzer
+    // wählt bewusst Desktop: ?desktop oder zuvor gesetztes Flag).
+    (function () {
+      try {
+        var params = new URLSearchParams(location.search);
+        if (params.has('desktop')) sessionStorage.setItem('tt-force-desktop', '1');
+        var forced = sessionStorage.getItem('tt-force-desktop');
+        var isMobile = window.matchMedia('(max-width: 700px)').matches ||
+          /Mobi|Android|iPhone|iPod/i.test(navigator.userAgent);
+        if (isMobile && !forced) location.replace('mobile.html');
+      } catch (_) { /* im Zweifel Desktop anzeigen */ }
+    })();
+  </script>
 </head>
 <body>
   <header class="app-header">
@@ -57,6 +71,7 @@
             <span id="zoomLabel" class="zoom-label"></span>
             <button id="zoomIn" class="btn btn-icon" type="button">+</button>
           </div>
+          <button id="addPlenumBtn" class="btn btn-secondary" title="Plenum-Block über alle Tracks (z.B. Keynote, Closing)">🔒 + Plenum</button>
           <button id="addTrackBtn" class="btn btn-primary">+ Track</button>
         </div>
       </div>

@@ -14,8 +14,11 @@ Teilen erfolgt über JSON-Dateien.
 - **Proportionale Zeitachse**: Blockhöhe entspricht der Dauer; ein gemeinsames
   Zeit-Lineal links und ausgerichtete Track-Spalten machen parallele Slots über
   alle Tracks hinweg vergleichbar. Zoom (px/min) per +/−.
-- **Lücken / Pausen** (`+ Lücke`): Leerzeit-Blöcke einfügen, um nachfolgende
-  Blöcke nach unten zu schieben und Tracks miteinander zu synchronisieren.
+- **Plenum- / Blocking-Blöcke** (`🔒 + Plenum`): Blöcke, die über ALLE Tracks
+  laufen (Begrüßung, Keynote, Closing). Sie wirken als Synchronisationspunkt –
+  nach einem Plenum starten alle Tracks gemeinsam wieder; ist ein paralleler
+  Abschnitt in einem Track kürzer, „wartet" er bis zum nächsten Plenum.
+- **Lücken / Pausen**: Leerzeit-Blöcke innerhalb eines Abschnitts einfügen.
 - **Blöcke direkt bearbeiten**: Doppelklick (oder ✎ am Block) öffnet einen
   Dialog für Name, Dauer und Farbe – unabhängig vom ursprünglichen Template.
 - **Automatische Zeitberechnung** ab einer frei wählbaren Startzeit – pro Block
@@ -43,6 +46,8 @@ Oder `index.html` direkt per Doppelklick öffnen.
 - **Mobil** (`mobile.html`): touch-optimiert – Templates antippen zum Hinzufügen,
   Blöcke per ↑/↓ sortieren. Beide teilen denselben localStorage-Stand und dasselbe
   JSON-Format. Umschalten über die Links in der Kopfzeile.
+- **Auto-Weiterleitung**: Mobilgeräte landen automatisch auf `mobile.html`. Über
+  „🖥 Desktop" (Link `index.html?desktop=1`) lässt sich das pro Sitzung übersteuern.
 
 ## Dateien
 

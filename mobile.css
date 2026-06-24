@@ -161,7 +161,32 @@ input[type="color"] { padding: 2px; width: 44px; height: 40px; }
 .m-block-ctrls button:active { background: #2c3744; }
 .m-block-ctrls .c-del:active { background: var(--danger); color: #fff; }
 
-.m-empty { color: var(--muted); font-style: italic; padding: 1rem; text-align: center; }
+.m-empty { color: var(--muted); font-style: italic; padding: 0.6rem 1rem; text-align: center; }
+
+/* Abschnitts-Kopf (Ziel-Auswahl) */
+.m-seg-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 0.75rem; color: var(--muted);
+  padding: 0.35rem 0.6rem; margin-top: 0.3rem;
+  border: 1px dashed var(--border); border-radius: 8px;
+  cursor: pointer;
+}
+.m-seg-head.target { border-color: var(--primary); color: var(--text); background: rgba(79,140,255,0.08); }
+.m-seg-pick { font-size: 0.72rem; }
+.m-seg-head.target .m-seg-pick { color: var(--primary); font-weight: 600; }
+
+/* Plenum-Zeile (volle Breite) */
+.m-plenum {
+  display: flex; align-items: stretch;
+  border: 1px solid var(--block-color, var(--primary));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--block-color, var(--primary)) 22%, var(--panel));
+  overflow: hidden;
+}
+.m-plenum .m-block-main { flex: 1; padding: 0.55rem 0.7rem; }
+.m-plenum .m-block-name { font-weight: 700; }
+.m-plenum-ctrls { grid-template-columns: 1fr; display: grid; }
+.m-target { color: var(--primary); font-weight: 600; font-size: 0.82rem; }
 
 /* Palette (Templates antippen) */
 .m-palette { padding: 0.8rem; border-top: 1px solid var(--border); }

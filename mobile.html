@@ -10,7 +10,7 @@
   <header class="m-header">
     <div class="m-title">
       <strong>🧩 Track-Tetris</strong>
-      <a href="index.html" class="m-link" title="Desktop-Version">🖥 Desktop</a>
+      <a href="index.html?desktop=1" class="m-link" title="Desktop-Version">🖥 Desktop</a>
     </div>
     <div class="m-controls">
       <label class="m-start">
@@ -34,18 +34,19 @@
     <div class="m-panel-head">
       <span id="trackSummary" class="m-summary"></span>
       <div class="m-track-actions">
+        <button id="addPlenumBtn" class="m-btn" title="Plenum über alle Tracks">🔒+</button>
         <button id="renameTrackBtn" class="m-btn" title="Track umbenennen">✎</button>
         <button id="delTrackBtn" class="m-btn" title="Track löschen">🗑</button>
       </div>
     </div>
     <ul id="blockList" class="m-blocks"></ul>
-    <button id="addGapBtn" class="m-btn m-wide">+ Pause / Lücke</button>
   </section>
 
   <!-- Hinzufügen: Templates antippen -->
   <section class="m-palette">
-    <h2>Antippen zum Hinzufügen</h2>
+    <h2>Antippen zum Hinzufügen <span id="addTarget" class="m-target"></span></h2>
     <div id="tplButtons" class="m-tpl-buttons"></div>
+    <button id="addGapBtn" class="m-btn m-wide">+ Pause / Lücke</button>
   </section>
 
   <!-- Templates verwalten -->
