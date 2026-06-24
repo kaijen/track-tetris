@@ -36,13 +36,28 @@ python3 -m http.server 8000
 
 Oder `index.html` direkt per Doppelklick öffnen.
 
+## Oberflächen
+
+- **Desktop** (`index.html`): Puzzle-Board mit Drag & Drop und proportionaler
+  Zeitachse.
+- **Mobil** (`mobile.html`): touch-optimiert – Templates antippen zum Hinzufügen,
+  Blöcke per ↑/↓ sortieren. Beide teilen denselben localStorage-Stand und dasselbe
+  JSON-Format. Umschalten über die Links in der Kopfzeile.
+
 ## Dateien
 
-| Datei         | Zweck                              |
-| ------------- | ---------------------------------- |
-| `index.html`  | Struktur / Markup                  |
-| `styles.css`  | Styling (Dark Theme)               |
-| `app.js`      | Logik, State, Drag & Drop, I/O     |
+| Datei         | Zweck                                         |
+| ------------- | --------------------------------------------- |
+| `index.html`  | Desktop-Markup                                |
+| `styles.css`  | Desktop-Styling (Dark Theme)                  |
+| `app.js`      | Desktop-UI: Rendering, Drag & Drop, Modal     |
+| `mobile.html` | Mobil-Markup                                  |
+| `mobile.css`  | Mobil-Styling                                 |
+| `mobile.js`   | Mobil-UI (touch-first)                        |
+| `core.js`     | Gemeinsame Datenschicht: State, Persistenz, Zeit-Mathematik, Mutationen, Im-/Export |
+
+CSS/JS werden beim Deploy über `?v=<commit-sha>` versioniert (Cache-Busting);
+im Markup steht dafür der Platzhalter `__BUILD__`, den der Workflow ersetzt.
 
 ## JSON-Format
 

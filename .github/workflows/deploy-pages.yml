@@ -26,8 +26,11 @@ jobs:
           set -euo pipefail
           rm -rf _site
           mkdir _site
-          # Nur die statischen Assets der App veröffentlichen
-          cp index.html styles.css app.js _site/
+          # Statische Assets der App veröffentlichen (Desktop + Mobil + gemeinsamer Core)
+          cp index.html styles.css app.js core.js mobile.html mobile.css mobile.js _site/
+          # Cache-Busting: Platzhalter __BUILD__ durch kurze Commit-SHA ersetzen
+          ver="${GITHUB_SHA:0:7}"
+          sed -i "s/__BUILD__/${ver}/g" _site/index.html _site/mobile.html
           # GitHub Pages soll die Dateien nicht durch Jekyll verarbeiten
           touch _site/.nojekyll
           # Custom-Domain erhalten (sonst wird sie beim Force-Push gelöscht -> 404)

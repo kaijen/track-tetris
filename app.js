@@ -1,41 +1,14 @@
-/* Track-Tetris – Konferenz-Rahmenzeitplaner
- * Reines Vanilla-JS, kein Backend. State im Browser, Persistenz via JSON-Export/Import.
+/* Track-Tetris – Desktop-Oberfläche.
+ * Nutzt window.TT (core.js) für State/Logik; hier nur Darstellung, Drag & Drop,
+ * Modal-Dialog und Datei-Im-/Export.
  */
 (() => {
   'use strict';
 
-  const STORAGE_KEY = 'track-tetris-state-v1';
-  const SCHEMA_VERSION = 1;
-
-  // Zoom (Pixel pro Minute) für die Zeitachse
-  const PX_STEPS = [0.8, 1.2, 1.8, 2.6, 3.6, 5];
-  const DEFAULT_PX = 1.8;
-
-  // ---- State -------------------------------------------------------------
-  /** @type {{version:number,startTime:string,pxPerMin:number,templates:Array,tracks:Array}} */
-  let state = loadState() || defaultState();
-
-  function defaultState() {
-    return {
-      version: SCHEMA_VERSION,
-      startTime: '09:00',
-      pxPerMin: DEFAULT_PX,
-      templates: [
-        { id: uid(), name: 'Keynote', duration: 45, color: '#4f8cff' },
-        { id: uid(), name: 'Workshop', duration: 90, color: '#36c98f' },
-        { id: uid(), name: 'Coffee Break', duration: 20, color: '#e0a64a' },
-        { id: uid(), name: 'Mittagspause', duration: 60, color: '#c668d4' },
-      ],
-      tracks: [
-        { id: uid(), name: 'Track A', blocks: [] },
-        { id: uid(), name: 'Track B', blocks: [] },
-      ],
-    };
-  }
-
-  function uid() {
-    return 'id-' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
-  }
+  const {
+    getState, subscribe, parseTime, formatTime, formatDuration, tickMinutes,
+    clampDuration, validColor, findTrack, trackTotal,
+  } = TT;
 
   // ---- DOM refs ----------------------------------------------------------
   const els = {
@@ -62,122 +35,18 @@
     modalCancel: document.getElementById('modalCancel'),
   };
 
-  // ---- Persistence -------------------------------------------------------
-  function saveState() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (_) { /* storage voll/blockiert – ignorieren */ }
-  }
-
-  function loadState() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      return normalizeState(JSON.parse(raw));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /** Validiert & repariert geladene Daten (Import / localStorage). */
-  function normalizeState(data) {
-    if (!data || typeof data !== 'object') throw new Error('Ungültiges Format');
-    const out = {
-      version: SCHEMA_VERSION,
-      startTime: typeof data.startTime === 'string' && /^\d{1,2}:\d{2}$/.test(data.startTime)
-        ? data.startTime : '09:00',
-      pxPerMin: clampPx(data.pxPerMin),
-      templates: [],
-      tracks: [],
-    };
-    if (Array.isArray(data.templates)) {
-      out.templates = data.templates.map((t) => ({
-        id: t.id || uid(),
-        name: String(t.name ?? 'Template'),
-        duration: clampDuration(t.duration),
-        color: validColor(t.color),
-      }));
-    }
-    if (Array.isArray(data.tracks)) {
-      out.tracks = data.tracks.map((tr) => ({
-        id: tr.id || uid(),
-        name: String(tr.name ?? 'Track'),
-        blocks: Array.isArray(tr.blocks) ? tr.blocks.map((b) => ({
-          id: b.id || uid(),
-          templateId: b.templateId || null,
-          name: String(b.name ?? 'Block'),
-          duration: clampDuration(b.duration),
-          color: validColor(b.color),
-          isGap: !!b.isGap,
-        })) : [],
-      }));
-    }
-    if (out.tracks.length === 0) out.tracks = [{ id: uid(), name: 'Track A', blocks: [] }];
-    return out;
-  }
-
-  function clampDuration(d) {
-    const n = Math.round(Number(d));
-    return Number.isFinite(n) && n > 0 ? n : 30;
-  }
-  function clampPx(p) {
-    const n = Number(p);
-    return Number.isFinite(n) && n >= 0.4 && n <= 8 ? n : DEFAULT_PX;
-  }
-  function validColor(c) {
-    return typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : '#4f8cff';
-  }
-
-  // ---- Time helpers ------------------------------------------------------
-  function parseTime(str) {
-    const [h, m] = str.split(':').map(Number);
-    return (h * 60 + m);
-  }
-  function formatTime(totalMin) {
-    const minsInDay = ((totalMin % 1440) + 1440) % 1440;
-    const h = Math.floor(minsInDay / 60);
-    const m = minsInDay % 60;
-    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-  }
-  function formatDuration(min) {
-    if (min < 60) return min + ' min';
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    return m === 0 ? h + ' h' : h + ' h ' + m + ' min';
-  }
-
-  // ---- Lookups -----------------------------------------------------------
-  function findTrack(trackId) {
-    return state.tracks.find((t) => t.id === trackId);
-  }
-  function trackTotal(track) {
-    return track.blocks.reduce((sum, b) => sum + b.duration, 0);
-  }
-
-  /** Tick-Intervall (Minuten), so dass Linien nicht zu dicht stehen (>= ~42px). */
-  function tickMinutes() {
-    const candidates = [5, 10, 15, 30, 60, 120, 180];
-    for (const c of candidates) {
-      if (c * state.pxPerMin >= 42) return c;
-    }
-    return 240;
-  }
-
   // =======================================================================
   //  RENDER
   // =======================================================================
   function render() {
-    renderTemplates();
-    renderTracks();
-    renderZoom();
-    saveState();
-  }
-
-  function renderZoom() {
+    const state = getState();
+    els.startTime.value = state.startTime;
     els.zoomLabel.textContent = state.pxPerMin.toFixed(1) + ' px/min';
+    renderTemplates(state);
+    renderTracks(state);
   }
 
-  function renderTemplates() {
+  function renderTemplates(state) {
     const list = els.templateList;
     list.innerHTML = '';
     if (state.templates.length === 0) {
@@ -220,19 +89,17 @@
     }
   }
 
-  function renderTracks() {
+  function renderTracks(state) {
     const board = els.trackBoard;
     board.innerHTML = '';
     const startMin = parseTime(state.startTime);
     const px = state.pxPerMin;
-    const tick = tickMinutes();
+    const tick = tickMinutes(px);
     const tickPx = tick * px;
 
-    // Höhe der Zeitachse = längster Track (mind. 1 Tick), damit alle Lanes ausgerichtet sind
     const maxTotal = Math.max(0, ...state.tracks.map(trackTotal));
     const axisMinutes = Math.max(maxTotal, tick);
     const axisHeight = axisMinutes * px;
-
     board.style.setProperty('--tick-px', tickPx + 'px');
 
     // --- Ruler-Lane ---
@@ -263,7 +130,6 @@
       const total = trackTotal(track);
       const endMin = startMin + total;
 
-      // Head
       const head = document.createElement('div');
       head.className = 'lane-head';
 
@@ -272,10 +138,7 @@
       const nameInput = document.createElement('input');
       nameInput.className = 'track-name';
       nameInput.value = track.name;
-      nameInput.addEventListener('change', () => {
-        track.name = nameInput.value.trim() || 'Track';
-        render();
-      });
+      nameInput.addEventListener('change', () => TT.renameTrack(track.id, nameInput.value));
       const delTrackBtn = document.createElement('button');
       delTrackBtn.className = 'btn btn-icon';
       delTrackBtn.textContent = '🗑';
@@ -295,7 +158,6 @@
 
       head.append(nameRow, meta, addGapBtn);
 
-      // Canvas
       const canvas = document.createElement('div');
       canvas.className = 'track-canvas';
       canvas.dataset.trackId = track.id;
@@ -318,11 +180,10 @@
       board.appendChild(lane);
     }
 
-    // Add-track tile
     const addTile = document.createElement('button');
     addTile.className = 'add-track-tile';
     addTile.textContent = '+ Track';
-    addTile.addEventListener('click', addTrack);
+    addTile.addEventListener('click', () => TT.addTrack());
     board.appendChild(addTile);
   }
 
@@ -352,7 +213,7 @@
     actions.addEventListener('mousedown', (e) => e.stopPropagation());
     el.querySelector('.act-del').addEventListener('click', (e) => {
       e.stopPropagation();
-      removeBlock(track.id, block.id);
+      TT.removeBlock(track.id, block.id);
     });
     el.querySelector('.act-edit').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -378,7 +239,7 @@
   // =======================================================================
   //  DRAG & DROP
   // =======================================================================
-  let dragData = null; // { kind:'template', templateId } | { kind:'block', trackId, blockId }
+  let dragData = null;
 
   function clearPlaceholders() {
     document.querySelectorAll('.block-drop-placeholder').forEach((p) => p.remove());
@@ -394,9 +255,7 @@
       showPlaceholder(canvas, e.clientY);
     });
     canvas.addEventListener('dragleave', (e) => {
-      if (!canvas.contains(e.relatedTarget)) {
-        canvas.classList.remove('drag-over');
-      }
+      if (!canvas.contains(e.relatedTarget)) canvas.classList.remove('drag-over');
     });
     canvas.addEventListener('drop', (e) => {
       if (!dragData) return;
@@ -434,33 +293,14 @@
 
   function handleDrop(targetTrack, index) {
     if (dragData.kind === 'template') {
-      const tpl = state.templates.find((t) => t.id === dragData.templateId);
-      if (!tpl) return;
-      const block = {
-        id: uid(),
-        templateId: tpl.id,
-        name: tpl.name,
-        duration: tpl.duration,
-        color: tpl.color,
-        isGap: false,
-      };
-      targetTrack.blocks.splice(index, 0, block);
+      TT.addBlockFromTemplate(dragData.templateId, targetTrack.id, index);
     } else if (dragData.kind === 'block') {
-      const srcTrack = findTrack(dragData.trackId);
-      if (!srcTrack) return;
-      const srcIdx = srcTrack.blocks.findIndex((b) => b.id === dragData.blockId);
-      if (srcIdx === -1) return;
-      const [moved] = srcTrack.blocks.splice(srcIdx, 1);
-      let insertAt = index;
-      // Korrektur, wenn innerhalb desselben Tracks nach hinten verschoben
-      if (srcTrack === targetTrack && srcIdx < index) insertAt = index - 1;
-      targetTrack.blocks.splice(insertAt, 0, moved);
+      TT.moveBlock(dragData.trackId, dragData.blockId, targetTrack.id, index);
     }
-    render();
   }
 
   // =======================================================================
-  //  MODAL (reusable edit dialog)
+  //  MODAL
   // =======================================================================
   let modalSubmit = null;
   function openModal(title, fields, onSave) {
@@ -492,11 +332,7 @@
     const first = els.modalFields.querySelector('input');
     if (first) { first.focus(); first.select(); }
   }
-
-  function closeModal() {
-    els.modal.hidden = true;
-    modalSubmit = null;
-  }
+  function closeModal() { els.modal.hidden = true; modalSubmit = null; }
 
   els.modalForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -510,7 +346,7 @@
   });
 
   // =======================================================================
-  //  BLOCK / GAP EDIT
+  //  EDIT ACTIONS
   // =======================================================================
   function editBlock(trackId, blockId) {
     const tr = findTrack(trackId);
@@ -522,127 +358,75 @@
     ];
     if (!block.isGap) fields.push({ key: 'color', label: 'Farbe', type: 'color', value: block.color });
     openModal(block.isGap ? 'Lücke bearbeiten' : 'Block bearbeiten', fields, (v) => {
-      block.name = v.name.trim() || block.name;
-      block.duration = clampDuration(v.duration);
-      if (v.color) block.color = validColor(v.color);
-      render();
+      TT.updateBlock(trackId, blockId, v);
     });
   }
 
   function addGap(trackId) {
-    const tr = findTrack(trackId);
-    if (!tr) return;
     openModal('Lücke / Pause einfügen', [
       { key: 'name', label: 'Bezeichnung', type: 'text', value: 'Pause' },
       { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: 15 },
-    ], (v) => {
-      tr.blocks.push({
-        id: uid(),
-        templateId: null,
-        name: v.name.trim() || 'Pause',
-        duration: clampDuration(v.duration),
-        color: '#8b97a6',
-        isGap: true,
-      });
-      render();
-    });
+    ], (v) => TT.addGap(trackId, v));
   }
 
-  // =======================================================================
-  //  TEMPLATE CRUD
-  // =======================================================================
-  els.templateForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const name = els.tplName.value.trim();
-    const duration = clampDuration(els.tplDuration.value);
-    if (!name) return;
-    state.templates.push({ id: uid(), name, duration, color: els.tplColor.value });
-    els.tplName.value = '';
-    els.tplDuration.value = '30';
-    render();
-    els.tplName.focus();
-  });
-
   function editTemplate(id) {
-    const tpl = state.templates.find((t) => t.id === id);
+    const tpl = getState().templates.find((t) => t.id === id);
     if (!tpl) return;
     openModal('Template bearbeiten', [
       { key: 'name', label: 'Name', type: 'text', value: tpl.name },
       { key: 'duration', label: 'Dauer (Minuten)', type: 'number', value: tpl.duration },
       { key: 'color', label: 'Farbe', type: 'color', value: tpl.color },
     ], (v) => {
-      tpl.name = v.name.trim() || tpl.name;
-      tpl.duration = clampDuration(v.duration);
-      tpl.color = validColor(v.color);
-      render();
+      TT.updateTemplate(id, v);
       toast('Template aktualisiert. Bereits platzierte Blöcke bleiben unverändert.');
     });
   }
 
   function deleteTemplate(id) {
-    const tpl = state.templates.find((t) => t.id === id);
+    const tpl = getState().templates.find((t) => t.id === id);
     if (!tpl) return;
     if (!confirm(`Template „${tpl.name}" löschen? Bereits platzierte Blöcke bleiben erhalten.`)) return;
-    state.templates = state.templates.filter((t) => t.id !== id);
-    render();
-  }
-
-  // =======================================================================
-  //  TRACK CRUD
-  // =======================================================================
-  function addTrack() {
-    const letter = String.fromCharCode(65 + state.tracks.length); // A, B, C…
-    state.tracks.push({ id: uid(), name: 'Track ' + letter, blocks: [] });
-    render();
+    TT.deleteTemplate(id);
   }
 
   function deleteTrack(id) {
-    if (state.tracks.length <= 1) {
-      toast('Mindestens ein Track muss bestehen bleiben.');
-      return;
-    }
     const tr = findTrack(id);
-    if (tr && tr.blocks.length > 0 && !confirm(`Track „${tr.name}" mit ${tr.blocks.length} Blöcken löschen?`)) return;
-    state.tracks = state.tracks.filter((t) => t.id !== id);
-    render();
-  }
-
-  function removeBlock(trackId, blockId) {
-    const tr = findTrack(trackId);
     if (!tr) return;
-    tr.blocks = tr.blocks.filter((b) => b.id !== blockId);
-    render();
+    if (tr.blocks.length > 0 && !confirm(`Track „${tr.name}" mit ${tr.blocks.length} Blöcken löschen?`)) return;
+    if (!TT.deleteTrack(id)) toast('Mindestens ein Track muss bestehen bleiben.');
   }
 
   // =======================================================================
-  //  START TIME / ZOOM
+  //  FORMS / CONTROLS
   // =======================================================================
-  els.startTime.addEventListener('change', () => {
-    state.startTime = els.startTime.value || '09:00';
-    render();
+  els.templateForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const created = TT.addTemplate({
+      name: els.tplName.value,
+      duration: els.tplDuration.value,
+      color: els.tplColor.value,
+    });
+    if (created) {
+      els.tplName.value = '';
+      els.tplDuration.value = '30';
+      els.tplName.focus();
+    }
   });
 
-  function setZoom(dir) {
-    const i = PX_STEPS.findIndex((v) => Math.abs(v - state.pxPerMin) < 0.001);
-    let idx = i === -1 ? PX_STEPS.indexOf(DEFAULT_PX) : i;
-    idx = Math.min(PX_STEPS.length - 1, Math.max(0, idx + dir));
-    state.pxPerMin = PX_STEPS[idx];
-    render();
-  }
-  els.zoomIn.addEventListener('click', () => setZoom(1));
-  els.zoomOut.addEventListener('click', () => setZoom(-1));
+  els.startTime.addEventListener('change', () => TT.setStartTime(els.startTime.value));
+  els.zoomIn.addEventListener('click', () => TT.stepZoom(1));
+  els.zoomOut.addEventListener('click', () => TT.stepZoom(-1));
+  els.addTrackBtn.addEventListener('click', () => TT.addTrack());
 
   // =======================================================================
   //  EXPORT / IMPORT
   // =======================================================================
   els.exportBtn.addEventListener('click', () => {
-    const data = JSON.stringify(state, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
+    const blob = new Blob([TT.toJSON()], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 10);
     a.href = url;
-    a.download = `konferenz-zeitplan-${stamp}.json`;
+    a.download = `konferenz-zeitplan-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     toast('Als JSON exportiert.');
@@ -654,14 +438,8 @@
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try {
-        state = normalizeState(JSON.parse(reader.result));
-        syncInputs();
-        render();
-        toast('Zeitplan geladen.');
-      } catch (err) {
-        toast('Import fehlgeschlagen: ' + err.message);
-      }
+      try { TT.importJSON(reader.result); toast('Zeitplan geladen.'); }
+      catch (err) { toast('Import fehlgeschlagen: ' + err.message); }
     };
     reader.readAsText(file);
     els.importFile.value = '';
@@ -669,9 +447,7 @@
 
   els.resetBtn.addEventListener('click', () => {
     if (!confirm('Wirklich alles zurücksetzen? Nicht exportierte Änderungen gehen verloren.')) return;
-    state = defaultState();
-    syncInputs();
-    render();
+    TT.reset();
   });
 
   // =======================================================================
@@ -685,13 +461,7 @@
     toastTimer = setTimeout(() => { els.toast.hidden = true; }, 3000);
   }
 
-  function syncInputs() {
-    els.startTime.value = state.startTime;
-  }
-
-  els.addTrackBtn.addEventListener('click', addTrack);
-
   // ---- Init --------------------------------------------------------------
-  syncInputs();
+  subscribe(render);
   render();
 })();
