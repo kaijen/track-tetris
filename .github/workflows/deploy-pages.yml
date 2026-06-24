@@ -30,6 +30,8 @@ jobs:
           cp index.html styles.css app.js _site/
           # GitHub Pages soll die Dateien nicht durch Jekyll verarbeiten
           touch _site/.nojekyll
+          # Custom-Domain erhalten (sonst wird sie beim Force-Push gelöscht -> 404)
+          [ -f CNAME ] && cp CNAME _site/CNAME || true
 
       - name: Publish to gh-pages branch
         env:
